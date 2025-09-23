@@ -1,9 +1,11 @@
-#include "pico/stdlib.h"
+#include <pico/stdlib.h>
 #include <stdio.h>
-#include "hardware/spi.h"
-#include "time.h"
+#include <hardware/spi.h>
+#include <time.h>
 #include <inttypes.h>
 #include <hardware/watchdog.h>
+#include <pico/multicore.h>
+#include <pico/util/queue.h>
 
 enum
 {
@@ -15,7 +17,8 @@ enum
     kImuInterruptPin = 15,
     kAccelDataXhRegister = 0x1f,
     kImuClkinPin = 21,
-    
+    kLedPin = PICO_DEFAULT_LED_PIN, // 25.
+
     // IMU registers
     // Note that some are defined only for reference as bulk reads exists.
     kPwrMgmt0 = 0x4E,
@@ -43,6 +46,7 @@ enum
 
 #pragma region Function Definitions
 
+// One-time writes to IMU config-type registers.
 void ImuInitRegisters()
 {
     // Do some one-time SPI writes.
@@ -83,6 +87,47 @@ void ImuInitRegisters()
 
 #pragma endregion
 
+// Structs.
+typedef struct
+{
+    absolute_time_t t;
+    int16_t ax;
+    int16_t ay;
+    int16_t az;
+    int16_t gx;
+    int16_t gy;
+    int16_t gz;
+} ImuSample;
+
+// Global vars.
+queue_t printf_buffer;
+const uint kMaxQueueSize = 50000; // Use 50KB of available 264KB of SRAM.
+
+// Secondary core.
+void secondary_core_main()
+{
+    // Print csv header.
+    printf("Time (microseconds), Acceleration X (divide by 8192 to get Gs), Acceleration Y, Acceleration Z, Gyro X (divide by 65.5 to get degrees/sec), Gyro Y, Gyro Z\n");
+
+    ImuSample data = {0};
+    while (true)
+    {
+        // Blink task.
+        static absolute_time_t last_blink_u = 0;
+        int blink_speed = 10 * queue_get_level(&printf_buffer) / kMaxQueueSize + 1; // Value ranges 1-10.
+        int blink_delay_u = 500000 / blink_speed;
+        if (get_absolute_time > last_blink_u + blink_delay_u) {
+            gpio_put(kLedPin, !gpio_get(kLedPin));
+            last_blink_u = get_absolute_time();
+        }
+
+        if (queue_try_remove(&printf_buffer, &data) == false)
+            continue;
+
+        printf("%" PRId64 ", %d, %d, %d, %d, %d, %d\n", data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+    }
+}
+
 void main()
 {
     // LED init.
@@ -92,12 +137,15 @@ void main()
     // UART printf init.
     stdio_init_all();
 
+    // Init queue.
+    queue_init(&printf_buffer, sizeof(ImuSample), kMaxQueueSize);
+    
     // Imu interrupt init.
     gpio_init(kImuInterruptPin);
     gpio_set_dir(kImuInterruptPin, GPIO_IN);
     gpio_disable_pulls(kImuInterruptPin);
     gpio_pull_up(kImuInterruptPin);
-
+    
     // Imu Spibus init.
     spi_init(spi0, 1000 * 1000);
     spi_set_format(spi0, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
@@ -105,25 +153,12 @@ void main()
     gpio_set_function(kImuCsPin, GPIO_FUNC_SPI);
     gpio_set_function(kImuSckPin, GPIO_FUNC_SPI);
     gpio_set_function(kImuTxPin, GPIO_FUNC_SPI);
-    gpio_disable_pulls(kImuRxPin); // Since when was this line needed???
-
+    gpio_disable_pulls(kImuRxPin);
     ImuInitRegisters();
-
-    // Recording buffers.
-    const int kSamplesToRecord = 5000;
-    absolute_time_t timestamp_record_buffer[kSamplesToRecord];
-    int16_t imu_record_buffer[kSamplesToRecord * 6];
-
-    // Blink for a second.
-    for (int i = 0; i < 10; i++)
-    {
-        gpio_put(PICO_DEFAULT_LED_PIN, 1);
-        sleep_ms(50);
-        gpio_put(PICO_DEFAULT_LED_PIN, 0);
-        sleep_ms(50);
-    }
-    printf("Program start.\n");
-
+    
+    // Start second core.
+    multicore_launch_core1(secondary_core_main);
+    
     while (true)
     {
         // Wait until kImuInterruptPin pin is low.
@@ -132,54 +167,26 @@ void main()
             tight_loop_contents();
         }
 
-        // Sample counter.
-        static uint curr_sample = 0;
-        curr_sample++;
-
-        // Record time.
+        // Record time (done right beforeIMU data read).
         absolute_time_t curr_time = get_absolute_time();
-        timestamp_record_buffer[curr_sample - 1] = curr_time;
 
-        // Read.
+        // Read from IMU.
         uint8_t spi_out[13], spi_in[13]; // 13 is enough to read all IMU data.
         spi_out[0] = kAccelDataXhRegister | 0x80;
         spi_write_read_blocking(spi0, spi_out, spi_in, 13);
 
-        // Parse.
-        int16_t accel_reg[3] = {(spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6]};
-        int16_t gyro_reg[3] = {(spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
+        // Parse IMU bits.
+        ImuSample data = {curr_time,
+                          (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
+                          (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
 
         // Record IMU data.
-        if (curr_sample > kSamplesToRecord)
-            break;
-        imu_record_buffer[(curr_sample - 1) * 6 + 0] = accel_reg[0];
-        imu_record_buffer[(curr_sample - 1) * 6 + 1] = accel_reg[1];
-        imu_record_buffer[(curr_sample - 1) * 6 + 2] = accel_reg[2];
-        imu_record_buffer[(curr_sample - 1) * 6 + 3] = gyro_reg[0];
-        imu_record_buffer[(curr_sample - 1) * 6 + 4] = gyro_reg[1];
-        imu_record_buffer[(curr_sample - 1) * 6 + 5] = gyro_reg[2];
+        queue_try_add(&printf_buffer, &data);
 
+        sleep_ms(1000);
         // Sleep for safety.
+
         sleep_us(200);
-    }
-
-    // Print csv header.
-    printf("Time (microseconds), Acceleration X (divide by 8192 to get Gs), Acceleration Y, Acceleration Z, Gyro X (divide by 65.5 to get degrees/sec), Gyro Y, Gyro Z\n");
-
-    // Print IMU data as csv.
-    for (int i = 0; i < kSamplesToRecord; i++)
-    {
-        printf("%" PRId64 ", %d, %d, %d, %d, %d, %d\n", timestamp_record_buffer[i], imu_record_buffer[i * 6 + 0], imu_record_buffer[i * 6 + 1], imu_record_buffer[i * 6 + 2], imu_record_buffer[i * 6 + 3], imu_record_buffer[i * 6 + 4], imu_record_buffer[i * 6 + 5]);
-    }
-
-    // Print status msg.
-    printf("Data recording complete, restarting program in 5 seconds.\n");
-    sleep_ms(5000);
-    printf("\033[2J\033[H");
-
-    // Reset program.
-    watchdog_enable(100, true);
-    while (true) {
-        tight_loop_contents();
+        // Sleep for debuging.
     }
 }
