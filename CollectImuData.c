@@ -18,6 +18,8 @@ enum
     kAccelDataXhRegister = 0x1f,
     kImuClkinPin = 21,
     kLedPin = PICO_DEFAULT_LED_PIN, // 25.
+    kDebugPin1 = 0,
+    kDebugPin2 = 1,
 
     // IMU registers
     // Note that some are defined only for reference as bulk reads exists.
@@ -101,7 +103,7 @@ typedef struct
 
 // Global vars.
 queue_t printf_buffer;
-const uint kMaxQueueSize = 50000; // Use 50KB of available 264KB of SRAM.
+const uint kMaxQueueSize = 10000; // Use 50KB of available 264KB of SRAM.
 
 // Secondary core.
 void secondary_core_main()
@@ -114,9 +116,10 @@ void secondary_core_main()
     {
         // Blink task.
         static absolute_time_t last_blink_u = 0;
-        int blink_speed = 10 * queue_get_level(&printf_buffer) / kMaxQueueSize + 1; // Value ranges 1-10.
-        int blink_delay_u = 500000 / blink_speed;
-        if (get_absolute_time > last_blink_u + blink_delay_u) {
+        int blink_speed = 100 * queue_get_level(&printf_buffer) / kMaxQueueSize + 1; // Value ranges 1-10.
+        int blink_delay_u = 3000000 / blink_speed;
+        if (get_absolute_time() > last_blink_u + blink_delay_u)
+        {
             gpio_put(kLedPin, !gpio_get(kLedPin));
             last_blink_u = get_absolute_time();
         }
@@ -131,43 +134,78 @@ void secondary_core_main()
 void main()
 {
     // LED init.
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    {
+        gpio_init(kLedPin);
+        gpio_set_dir(kLedPin, GPIO_OUT);
+    }
 
-    // UART printf init.
-    stdio_init_all();
+    // Init debug printfs and gpios.
+    if (true)
+    {
+        stdio_uart_init_full(uart0, 250000, kDebugPin1, kDebugPin2);
+        gpio_init(kDebugPin2);
+        gpio_set_dir(kDebugPin2, GPIO_OUT);
+        gpio_put(kDebugPin2, 0);
+    }
+    else
+    {
+        gpio_init(kDebugPin1);
+        gpio_init(kDebugPin2);
+        gpio_set_dir(kDebugPin1, GPIO_OUT);
+        gpio_set_dir(kDebugPin2, GPIO_OUT);
+        gpio_put(kDebugPin1, 0);
+        gpio_put(kDebugPin2, 0);
+    }
 
-    // Init queue.
-    queue_init(&printf_buffer, sizeof(ImuSample), kMaxQueueSize);
-    
-    // Imu interrupt init.
-    gpio_init(kImuInterruptPin);
-    gpio_set_dir(kImuInterruptPin, GPIO_IN);
-    gpio_disable_pulls(kImuInterruptPin);
-    gpio_pull_up(kImuInterruptPin);
-    
-    // Imu Spibus init.
-    spi_init(spi0, 1000 * 1000);
-    spi_set_format(spi0, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
-    gpio_set_function(kImuRxPin, GPIO_FUNC_SPI);
-    gpio_set_function(kImuCsPin, GPIO_FUNC_SPI);
-    gpio_set_function(kImuSckPin, GPIO_FUNC_SPI);
-    gpio_set_function(kImuTxPin, GPIO_FUNC_SPI);
-    gpio_disable_pulls(kImuRxPin);
-    ImuInitRegisters();
-    
+    // Clear console.
+    {
+        printf("\033[2J\033[HProgram Started.\n\n");
+    }
+
+    // Blinking and multicore safety sleep.
+    for (int i = 0; i < 10; i++)
+    {
+        gpio_put(kLedPin, 1);
+        sleep_ms(50);
+        gpio_put(kLedPin, 0);
+        sleep_ms(50);
+    }
+
     // Start second core.
-    multicore_launch_core1(secondary_core_main);
-    
+    {
+        multicore_launch_core1(secondary_core_main);
+    }
+
+    // Init printf queue.
+    {
+        queue_init(&printf_buffer, sizeof(ImuSample), kMaxQueueSize);
+    }
+
+    // Imu initialization.
+    {
+        // Imu interrupt init.
+        gpio_init(kImuInterruptPin);
+        gpio_set_dir(kImuInterruptPin, GPIO_IN);
+        gpio_disable_pulls(kImuInterruptPin);
+        gpio_pull_up(kImuInterruptPin);
+        // Imu Spibus init.
+        spi_init(spi0, 1000 * 1000);
+        spi_set_format(spi0, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
+        gpio_set_function(kImuRxPin, GPIO_FUNC_SPI);
+        gpio_set_function(kImuCsPin, GPIO_FUNC_SPI);
+        gpio_set_function(kImuSckPin, GPIO_FUNC_SPI);
+        gpio_set_function(kImuTxPin, GPIO_FUNC_SPI);
+        gpio_disable_pulls(kImuRxPin);
+        ImuInitRegisters();
+    }
+
     while (true)
     {
         // Wait until kImuInterruptPin pin is low.
-        while (gpio_get(kImuInterruptPin) == true)
-        {
-            tight_loop_contents();
-        }
+        if (gpio_get(kImuInterruptPin) == true)
+            continue;
 
-        // Record time (done right beforeIMU data read).
+        // Record time (done right after Imu interrupt).
         absolute_time_t curr_time = get_absolute_time();
 
         // Read from IMU.
