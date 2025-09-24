@@ -4,7 +4,7 @@ clc
 
 % Plot several views of TestImuData.csv (IMU time series)
 
-fname = 'TestImuData.csv';
+fname = 'data1.txt';
 
 %% Load
 opts = detectImportOptions(fname,'NumHeaderLines',0,'VariableNamingRule','preserve');
@@ -30,13 +30,6 @@ gy = gy_raw / 65.5;            % deg/s
 gz = gz_raw / 65.5;            % deg/s
 a_mag = sqrt(ax.^2 + ay.^2 + az.^2);
 
-%% [Optional] Keep only data after 3 seconds (toggle on/off)
-% mask = t >= 3;
-% t = t(mask);
-% ax = ax(mask); ay = ay(mask); az = az(mask);
-% gx = gx(mask); gy = gy(mask); gz = gz(mask);
-% a_mag = a_mag(mask);
-
 %% Sampling rate (use median to be robust)
 dt = median(diff(t));
 % take differences between samples, take the median, result is sampling period
@@ -48,9 +41,20 @@ fprintf('Samples: %d | Duration: %.2f s | fs ≈ %.2f Hz\n', numel(t), t(end)-t(
 %% Figure 1: Acceleration (3-axis)
 figure('Name','Acceleration (G) vs Time','Color','w');
 tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
-nexttile; plot(t, ax, 'LineWidth',1); grid on; ylabel('A_x (G)'); title('Acceleration');
-nexttile; plot(t, ay, 'LineWidth',1); grid on; ylabel('A_y (G)');
-nexttile; plot(t, az, 'LineWidth',1); grid on; ylabel('A_z (G)'); xlabel('Time (s)');
+nexttile;
+plot(t, ax, 'LineWidth',1); grid on; ylabel('A_x (G)'); title('Acceleration');
+hold on;
+big = t(abs(ax) > 3 | abs(ay) > 3 | abs(az) > 3);
+for k = 1:numel(big)
+    xline(big(k), 'r--', 'LineWidth', 0.5);
+end
+hold off;
+nexttile;
+plot(t, ay, 'LineWidth',1); grid on; ylabel('A_y (G)');
+nexttile;
+plot(t, az, 'LineWidth',1); grid on; ylabel('A_z (G)'); xlabel('Time (s)');
+
+return;
 
 %% Figure 2: Gyroscope (3-axis)
 figure('Name','Gyroscope (deg/s) vs Time','Color','w');
