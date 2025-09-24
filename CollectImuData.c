@@ -224,7 +224,7 @@ void main()
         if (queue_try_add(&printf_buffer, &data) == false) {
             while (true)
             {
-                tight_loop_contents();
+                gpio_put(kLedPin, true);
             }
         }
 
