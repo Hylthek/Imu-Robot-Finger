@@ -114,6 +114,10 @@ void secondary_core_main()
     ImuSample data = {0};
     while (true)
     {
+        // Continue if buffer empty.
+        if (queue_try_remove(&printf_buffer, &data) == false)
+            continue;
+
         // Blink task.
         static absolute_time_t last_blink_u = 0;
         int blink_speed = 100 * queue_get_level(&printf_buffer) / kMaxQueueSize + 1; // Value ranges 1-10.
@@ -124,9 +128,7 @@ void secondary_core_main()
             last_blink_u = get_absolute_time();
         }
 
-        if (queue_try_remove(&printf_buffer, &data) == false)
-            continue;
-
+        // Print in csv format.
         printf("%" PRId64 ", %d, %d, %d, %d, %d, %d\n", data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
     }
 }
@@ -219,12 +221,13 @@ void main()
                           (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
 
         // Record IMU data.
-        queue_try_add(&printf_buffer, &data);
-
-        sleep_ms(1000);
-        // Sleep for safety.
+        if (queue_try_add(&printf_buffer, &data) == false) {
+            while (true)
+            {
+                tight_loop_contents();
+            }
+        }
 
         sleep_us(200);
-        // Sleep for debuging.
     }
 }
