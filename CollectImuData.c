@@ -109,7 +109,7 @@ const uint kMaxQueueSize = 10000; // Use 50KB of available 264KB of SRAM.
 void secondary_core_main()
 {
     // Print csv header.
-    printf("Time (microseconds), Acceleration X (divide by 8192 to get Gs), Acceleration Y, Acceleration Z, Gyro X (divide by 65.5 to get degrees/sec), Gyro Y, Gyro Z\n");
+    printf("Time (microseconds), Acceleration X (divide by 2048 to get Gs), Acceleration Y, Acceleration Z, Gyro X (divide by 65.5 to get degrees/sec), Gyro Y, Gyro Z\n");
 
     ImuSample data = {0};
     while (true)
