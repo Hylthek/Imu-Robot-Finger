@@ -27,9 +27,17 @@ gz_raw = T{:,7};  % Gyro Z
 
 
 
+
+
+
+
+
 %% Convert units
 t = (t_us - t_us(1)) * 1e-6;   % seconds from start
 % rebases the time axis, converts units to seconds
+ax = ax_raw / 2048;            % G
+ay = ay_raw / 2048;            % G
+az = az_raw / 2048;            % G
 ax = ax_raw / 2048;            % G
 ay = ay_raw / 2048;            % G
 az = az_raw / 2048;            % G
@@ -42,6 +50,10 @@ a_mag = sqrt(ax.^2 + ay.^2 + az.^2);
 
 
 
+
+
+
+
 %% Sampling rate (use median to be robust)
 dt = median(diff(t));
 % take differences between samples, take the median, result is sampling period
@@ -49,6 +61,13 @@ fs = 1/dt;
 % take the inverse of the period to get sampling frequency
 
 fprintf('Samples: %d | Duration: %.2f s | fs ≈ %.2f Hz\n', numel(t), t(end)-t(1), fs);
+
+dt_all = diff(t);
+fprintf('dt min: %.6f s | dt max: %.6f s\n', min(dt_all), max(dt_all));
+
+
+
+
 
 dt_all = diff(t);
 fprintf('dt min: %.6f s | dt max: %.6f s\n', min(dt_all), max(dt_all));
@@ -91,6 +110,13 @@ return
 %% Figure 2: Gyroscope (3-axis)
 figure('Name','Gyroscope (deg/s) vs Time','Color','w');
 tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
+nexttile; plot(t, gx, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_x (deg/s)'); title('Gyroscope');
+nexttile; plot(t, gy, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_y (deg/s)');
+nexttile; plot(t, gz, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_z (deg/s)'); xlabel('Time (s)');
+
+
+return
+
 nexttile; plot(t, gx, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_x (deg/s)'); title('Gyroscope');
 nexttile; plot(t, gy, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_y (deg/s)');
 nexttile; plot(t, gz, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_z (deg/s)'); xlabel('Time (s)');
@@ -170,11 +196,13 @@ if fs > 5
     wwel = hamming(nseg);
     nover = floor(0.5*nseg);
     
+    
     figure('Name','PSD - Acceleration','Color','w');
     tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
     nexttile; pwelch(ax, wwel, nover, [], fs, 'onesided'); grid on; title('A_x PSD'); ylabel('Power/Hz');
     nexttile; pwelch(ay, wwel, nover, [], fs, 'onesided'); grid on; title('A_y PSD'); ylabel('Power/Hz');
     nexttile; pwelch(az, wwel, nover, [], fs, 'onesided'); grid on; title('A_z PSD'); xlabel('Hz'); ylabel('Power/Hz');
+    
     
     figure('Name','PSD - Gyroscope','Color','w');
     tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
