@@ -221,7 +221,8 @@ void main()
                           (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
 
         // Record IMU data.
-        if (queue_try_add(&printf_buffer, &data) == false) {
+        if (queue_try_add(&printf_buffer, &data) == false)
+        {
             while (true)
             {
                 gpio_put(kLedPin, true);
