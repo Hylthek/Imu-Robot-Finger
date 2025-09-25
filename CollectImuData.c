@@ -228,6 +228,6 @@ void main()
             }
         }
 
-        sleep_us(200);
+        sleep_us(20);
     }
 }
