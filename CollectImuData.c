@@ -55,8 +55,8 @@ void ImuInitRegisters()
     uint8_t spi_out[6], in_buf[6];
 
     // Bank 0.
-    spi_out[0] = kIntConfig1; // Initialize interrupts.
-    spi_out[1] = 0b00000000;
+    spi_out[0] = kIntConfig1;
+    spi_out[1] = 0b01000000; // Initialize interrupts. Also set interrupt pulse to 100us->8us
     spi_write_read_blocking(spi0, spi_out, in_buf, 2);
     spi_out[0] = kIntSource0;
     spi_out[1] = 0b00001000; // Change interrupt output from "Reset done" to "UI data ready".
