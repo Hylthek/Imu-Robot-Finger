@@ -4,7 +4,7 @@ clc
 
 % Plot several views of TestImuData.csv (IMU time series)
 
-fname = 'data1.txt';
+fname = 'data.csv';
 
 %% Load
 opts = detectImportOptions(fname,'NumHeaderLines',0,'VariableNamingRule','preserve');
@@ -43,18 +43,10 @@ figure('Name','Acceleration (G) vs Time','Color','w');
 tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
 nexttile;
 plot(t, ax, 'LineWidth',1); grid on; ylabel('A_x (G)'); title('Acceleration');
-hold on;
-big = t(abs(ax) > 3 | abs(ay) > 3 | abs(az) > 3);
-for k = 1:numel(big)
-    xline(big(k), 'r--', 'LineWidth', 0.5);
-end
-hold off;
 nexttile;
 plot(t, ay, 'LineWidth',1); grid on; ylabel('A_y (G)');
 nexttile;
 plot(t, az, 'LineWidth',1); grid on; ylabel('A_z (G)'); xlabel('Time (s)');
-
-return;
 
 %% Figure 2: Gyroscope (3-axis)
 figure('Name','Gyroscope (deg/s) vs Time','Color','w');
