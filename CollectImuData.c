@@ -211,7 +211,7 @@ void main()
         absolute_time_t curr_time = get_absolute_time();
 
         // Read from IMU.
-        uint8_t spi_out[13], spi_in[13]; // 13 is enough to read all IMU data.
+        uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
         spi_out[0] = kAccelDataXhRegister | 0x80;
         spi_write_read_blocking(spi0, spi_out, spi_in, 13);
 
