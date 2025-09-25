@@ -4,7 +4,11 @@ clc
 
 % Plot several views of TestImuData.csv (IMU time series)
 
-fname = 'data.csv';
+fname = 'LooseGripZTaps.csv';
+
+
+
+
 
 %% Load
 opts = detectImportOptions(fname,'NumHeaderLines',0,'VariableNamingRule','preserve');
@@ -19,16 +23,25 @@ gx_raw = T{:,5};  % Gyro X (raw)
 gy_raw = T{:,6};  % Gyro Y
 gz_raw = T{:,7};  % Gyro Z
 
+
+
+
+
+
 %% Convert units
 t = (t_us - t_us(1)) * 1e-6;   % seconds from start
 % rebases the time axis, converts units to seconds
-ax = ax_raw / 8192;            % G
-ay = ay_raw / 8192;            % G
-az = az_raw / 8192;            % G
+ax = ax_raw / 2048;            % G
+ay = ay_raw / 2048;            % G
+az = az_raw / 2048;            % G
 gx = gx_raw / 65.5;            % deg/s
 gy = gy_raw / 65.5;            % deg/s
 gz = gz_raw / 65.5;            % deg/s
 a_mag = sqrt(ax.^2 + ay.^2 + az.^2);
+
+
+
+
 
 %% Sampling rate (use median to be robust)
 dt = median(diff(t));
@@ -38,22 +51,42 @@ fs = 1/dt;
 
 fprintf('Samples: %d | Duration: %.2f s | fs ≈ %.2f Hz\n', numel(t), t(end)-t(1), fs);
 
+dt_all = diff(t);
+fprintf('dt min: %.6f s | dt max: %.6f s\n', min(dt_all), max(dt_all));
+
+
+
+
+
 %% Figure 1: Acceleration (3-axis)
 figure('Name','Acceleration (G) vs Time','Color','w');
-tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
+tiledlayout(4,1,'Padding','compact','TileSpacing','compact');
 nexttile;
-plot(t, ax, 'LineWidth',1); grid on; ylabel('A_x (G)'); title('Acceleration');
+plot(t, ax, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('A_x (G)'); title('Acceleration');
 nexttile;
-plot(t, ay, 'LineWidth',1); grid on; ylabel('A_y (G)');
+plot(t, ay, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('A_y (G)');
 nexttile;
-plot(t, az, 'LineWidth',1); grid on; ylabel('A_z (G)'); xlabel('Time (s)');
+plot(t, az, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('A_z (G)'); xlabel('Time (s)');
+nexttile;
+plot(t, ax, 'r', t, ay, 'g', t, az, 'b', 'LineWidth',1); grid on;
+ylabel('Accel (G)');
+xlabel('Time (s)');
+legend('A_x','A_y','A_z');
+title('All Axes');
+
+return
+
 
 %% Figure 2: Gyroscope (3-axis)
 figure('Name','Gyroscope (deg/s) vs Time','Color','w');
 tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
-nexttile; plot(t, gx, 'LineWidth',1); grid on; ylabel('G_x (deg/s)'); title('Gyroscope');
-nexttile; plot(t, gy, 'LineWidth',1); grid on; ylabel('G_y (deg/s)');
-nexttile; plot(t, gz, 'LineWidth',1); grid on; ylabel('G_z (deg/s)'); xlabel('Time (s)');
+nexttile; plot(t, gx, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_x (deg/s)'); title('Gyroscope');
+nexttile; plot(t, gy, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_y (deg/s)');
+nexttile; plot(t, gz, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_z (deg/s)'); xlabel('Time (s)');
+
+
+return
+
 
 %% Figure 3: Spectrograms (Acceleration) — no local functions (mlx-friendly)
 % Windowing params (tune as needed)
@@ -125,13 +158,13 @@ if fs > 5
     nseg = max(nseg, 64);                 % ensure enough points
     wwel = hamming(nseg);
     nover = floor(0.5*nseg);
-
+    
     figure('Name','PSD - Acceleration','Color','w');
     tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
     nexttile; pwelch(ax, wwel, nover, [], fs, 'onesided'); grid on; title('A_x PSD'); ylabel('Power/Hz');
     nexttile; pwelch(ay, wwel, nover, [], fs, 'onesided'); grid on; title('A_y PSD'); ylabel('Power/Hz');
     nexttile; pwelch(az, wwel, nover, [], fs, 'onesided'); grid on; title('A_z PSD'); xlabel('Hz'); ylabel('Power/Hz');
-
+    
     figure('Name','PSD - Gyroscope','Color','w');
     tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
     nexttile; pwelch(gx, wwel, nover, [], fs, 'onesided'); grid on; title('G_x PSD'); ylabel('Power/Hz');
