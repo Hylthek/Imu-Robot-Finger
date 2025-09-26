@@ -2,6 +2,8 @@ close all;
 format compact;
 clc;
 
+%#ok<*UNRCH>
+
 % Plot several views of TestImuData.csv (IMU time series)
 
 fname = 'Shirt.csv';
@@ -24,9 +26,6 @@ gz_raw = T{:,7};  % Gyro Z
 %% Convert units
 t = (t_us - t_us(1)) * 1e-6;   % seconds from start
 % rebases the time axis, converts units to seconds
-ax = ax_raw / 2048;            % G
-ay = ay_raw / 2048;            % G
-az = az_raw / 2048;            % G
 ax = ax_raw / 2048;            % G
 ay = ay_raw / 2048;            % G
 az = az_raw / 2048;            % G
