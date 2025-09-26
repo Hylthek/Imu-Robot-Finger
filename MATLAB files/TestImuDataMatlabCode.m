@@ -1,11 +1,10 @@
 close all;
-format compact
-clc
+format compact;
+clc;
 
 % Plot several views of TestImuData.csv (IMU time series)
 
-fname = 'LooseGripZTaps.csv';
-
+fname = 'Shirt.csv';
 set(0, 'DefaultFigureWindowStyle', 'normal');
 set(0, 'DefaultFigurePosition', get(0, 'ScreenSize'));
 
@@ -22,16 +21,6 @@ gx_raw = T{:,5};  % Gyro X (raw)
 gy_raw = T{:,6};  % Gyro Y
 gz_raw = T{:,7};  % Gyro Z
 
-
-
-
-
-
-
-
-
-
-
 %% Convert units
 t = (t_us - t_us(1)) * 1e-6;   % seconds from start
 % rebases the time axis, converts units to seconds
@@ -46,14 +35,6 @@ gy = gy_raw / 65.5;            % deg/s
 gz = gz_raw / 65.5;            % deg/s
 a_mag = sqrt(ax.^2 + ay.^2 + az.^2);
 
-
-
-
-
-
-
-
-
 %% Sampling rate (use median to be robust)
 dt = median(diff(t));
 % take differences between samples, take the median, result is sampling period
@@ -65,93 +46,90 @@ fprintf('Samples: %d | Duration: %.2f s | fs ≈ %.2f Hz\n', numel(t), t(end)-t(
 dt_all = diff(t);
 fprintf('dt min: %.6f s | dt max: %.6f s\n', min(dt_all), max(dt_all));
 
-
-
-
-
-dt_all = diff(t);
-fprintf('dt min: %.6f s | dt max: %.6f s\n', min(dt_all), max(dt_all));
-
-
-
-
-
 %% Figure 1: Acceleration (3-axis)
-figure('Name', 'Acceleration (G) vs Time ', 'Color', 'w');
-tabgp = uitabgroup;
+figure('Name', [fname ' - Acceleration (3-axis)'], 'Color', 'w', 'WindowStyle', 'docked');
+tgroup = uitabgroup;
 
-tab1 = uitab(tabgp, 'Title', 'A_x');
-axes('Parent', tab1);
-plot(t, ax, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('A_x (G)'); title('Acceleration');
-ylim([-16 16]);
+tab1 = uitab(tgroup, 'Title', 'A_x');
+ax1 = axes(tab1);
+plot(ax1, t, ax, 'LineWidth',1, 'Marker', '.'); grid(ax1, 'on');
+ylabel(ax1, 'A_x (G)');
+title(ax1, 'A_x'); ylim(ax1, [-16 16]);
 
-tab2 = uitab(tabgp, 'Title', 'A_y');
-axes('Parent', tab2);
-plot(t, ay, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('A_y (G)');
-ylim([-16 16]);
+tab2 = uitab(tgroup, 'Title', 'A_y');
+ax2 = axes(tab2);
+plot(ax2, t, ay, 'LineWidth',1, 'Marker', '.'); grid(ax2, 'on');
+ylabel(ax2, 'A_y (G)');
+title(ax2, 'A_y'); ylim(ax2, [-16 16]);
 
-tab3 = uitab(tabgp, 'Title', 'A_z');
-axes('Parent', tab3);
-plot(t, az, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('A_z (G)'); xlabel('Time (s)');
-ylim([-16 16]);
+tab3 = uitab(tgroup, 'Title', 'A_z');
+ax3 = axes(tab3);
+plot(ax3, t, az, 'LineWidth',1, 'Marker', '.'); grid(ax3, 'on');
+ylabel(ax3, 'A_z (G)'); xlabel(ax3, 'Time (s)');
+title(ax3, 'A_z'); ylim(ax3, [-16 16]);
 
-tab4 = uitab(tabgp, 'Title', 'All Axes');
-axes('Parent', tab4);
-plot(t, ax, 'r', t, ay, 'g', t, az, 'b', 'LineWidth',1); grid on;
-ylabel('Accel (G)');
-xlabel('Time (s)');
-legend('A_x','A_y','A_z');
-title('All Axes');
-ylim([-16 16]);
+tab4 = uitab(tgroup, 'Title', 'All Axes');
+ax4 = axes(tab4);
+plot(ax4, t, ax, 'r', t, ay, 'g', t, az, 'b', 'LineWidth',1); grid(ax4, 'on');
+ylabel(ax4, 'Accel (G)'); xlabel(ax4, 'Time (s)');
+legend(ax4, 'A_x','A_y','A_z');
+title(ax4, 'All Axes'); ylim(ax4, [-16 16]);
 
-return
+%% Figure 2: Gyroscope (3-axis) — docked tabs
+figure('Name', [fname ' - Gyroscope (3-axis)'], 'Color', 'w', 'WindowStyle', 'docked');
+tg = uitabgroup;
 
+tab1 = uitab(tg, 'Title', 'G_x');
+ax1 = axes(tab1);
+plot(ax1, t, gx, 'LineWidth',1, 'Marker', '.'); grid(ax1, 'on');
+ylabel(ax1, 'G_x (deg/s)');
+title(ax1, 'G_x');
 
-%% Figure 2: Gyroscope (3-axis)
-figure('Name','Gyroscope (deg/s) vs Time','Color','w');
-tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
-nexttile; plot(t, gx, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_x (deg/s)'); title('Gyroscope');
-nexttile; plot(t, gy, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_y (deg/s)');
-nexttile; plot(t, gz, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_z (deg/s)'); xlabel('Time (s)');
+tab2 = uitab(tg, 'Title', 'G_y');
+ax2 = axes(tab2);
+plot(ax2, t, gy, 'LineWidth',1, 'Marker', '.'); grid(ax2, 'on');
+ylabel(ax2, 'G_y (deg/s)');
+title(ax2, 'G_y');
 
+tab3 = uitab(tg, 'Title', 'G_z');
+ax3 = axes(tab3);
+plot(ax3, t, gz, 'LineWidth',1, 'Marker', '.'); grid(ax3, 'on');
+ylabel(ax3, 'G_z (deg/s)'); xlabel(ax3, 'Time (s)');
+title(ax3, 'G_z');
 
-return
+tab4 = uitab(tg, 'Title', 'All Axes');
+ax4 = axes(tab4);
+plot(ax4, t, gx, 'r', t, gy, 'g', t, gz, 'b', 'LineWidth',1); grid(ax4, 'on');
+ylabel(ax4, 'Gyro (deg/s)'); xlabel(ax4, 'Time (s)');
+legend(ax4, 'G_x','G_y','G_z');
+title(ax4, 'All Axes');
 
-nexttile; plot(t, gx, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_x (deg/s)'); title('Gyroscope');
-nexttile; plot(t, gy, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_y (deg/s)');
-nexttile; plot(t, gz, 'LineWidth',1, 'Marker', '.'); grid on; ylabel('G_z (deg/s)'); xlabel('Time (s)');
+%% Figure 3: Spectrograms (Acceleration)
+window = hamming(256);
+number_of_points_overlap = 128;
+number_of_points_fft = 512;
 
-
-return
-
-
-%% Figure 3: Spectrograms (Acceleration) — no local functions (mlx-friendly)
-% Windowing params (tune as needed)
-window_length_Sec = 0.25;                                        % 250 ms
-window_length_Samples = max(64, min(numel(t), round(window_length_Sec*fs)));    % cap at signal length
-number_of_points_overlap  = round(0.5*window_length_Samples);
-number_of_points_fft      = 2^nextpow2(max(window_length_Samples, 256));
-% ensures number of points in FFT at least 256
-window = hamming(window_length_Samples, 'periodic');
-
-figure('Name','Acceleration Spectrograms','Color','w');
+figure('Name',[fname ' - Acceleration Spectrograms'],'Color','w', 'WindowStyle', 'docked');
 tiledlayout(2,2,'Padding','compact','TileSpacing','compact');
-
 nexttile;
 spectrogram(ax - mean(ax,'omitnan'), window, number_of_points_overlap, number_of_points_fft, fs, 'yaxis');
-title('Ax Spectrogram'); colorbar; ylim([0, min(4000, fs/2)]); grid on;
+title('Ax Spectrogram'); colorbar; ylim([0, min(4, fs/2/1000)]); grid on;
 
 nexttile;
 spectrogram(ay - mean(ay,'omitnan'), window, number_of_points_overlap, number_of_points_fft, fs, 'yaxis');
-title('Ay Spectrogram'); colorbar; ylim([0, min(4000, fs/2)]); grid on;
+title('Ay Spectrogram'); colorbar; ylim([0, min(4, fs/2/1000)]); grid on;
 
 nexttile;
 spectrogram(az - mean(az,'omitnan'), window, number_of_points_overlap, number_of_points_fft, fs, 'yaxis');
-title('Az Spectrogram'); colorbar; ylim([0, min(4000, fs/2)]); grid on;
+title('Az Spectrogram'); colorbar; ylim([0, min(4, fs/2/1000)]); grid on;
 
 nexttile;
 spectrogram(a_mag - mean(a_mag,'omitnan'), window, number_of_points_overlap, number_of_points_fft, fs, 'yaxis');
-title('|a| Spectrogram'); colorbar; ylim([0, min(4000, fs/2)]); grid on;
+title('|a| Spectrogram'); colorbar; ylim([0, min(4, fs/2/1000)]); grid on;
+
+colormap hot;
+
+return;
 
 %% Figure 4: Spectrograms (Gyroscope)
 % Ensure gyro magnitude exists
