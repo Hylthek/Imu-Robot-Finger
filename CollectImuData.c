@@ -3,7 +3,6 @@
 #include <hardware/spi.h>
 #include <time.h>
 #include <inttypes.h>
-#include <hardware/watchdog.h>
 #include <pico/multicore.h>
 #include <pico/util/queue.h>
 
