@@ -101,8 +101,9 @@ typedef struct
 } ImuSample;
 
 // Global vars.
-queue_t printf_buffer;
-const uint kMaxQueueSize = 10000; // Use 50KB of available 264KB of SRAM.
+queue_t gPrintfBuffer;
+const uint kMaxQueueSize = 5000; // How many ImuSample can be recorded at a time.
+bool gRecording = false;
 
 // Secondary core.
 void secondary_core_main()
@@ -114,21 +115,25 @@ void secondary_core_main()
     while (true)
     {
         // Continue if buffer empty.
-        if (queue_try_remove(&printf_buffer, &data) == false)
+        if (queue_try_remove(&gPrintfBuffer, &data) == false) {
+            gpio_put(kLedPin, false);
             continue;
+        }
 
         // Blink task.
         static absolute_time_t last_blink_u = 0;
-        int blink_speed = 100 * queue_get_level(&printf_buffer) / kMaxQueueSize + 1; // Value ranges 1-10.
+        int blink_speed = 100 * queue_get_level(&gPrintfBuffer) / kMaxQueueSize + 1; // Value ranges 1-10.
         int blink_delay_u = 3000000 / blink_speed;
         if (get_absolute_time() > last_blink_u + blink_delay_u)
         {
             gpio_put(kLedPin, !gpio_get(kLedPin));
             last_blink_u = get_absolute_time();
         }
+        if (gRecording == false)
+            gpio_put(kLedPin, true);
 
         // Print in csv format.
-        printf("%" PRId64 ", %d, %d, %d, %d, %d, %d\n", data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+        printf("%" PRId64 ", %10d, %10d, %10d, %10d, %10d, %10d\n", data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
     }
 }
 
@@ -143,10 +148,7 @@ void main()
     // Init debug printfs and gpios.
     if (true)
     {
-        stdio_uart_init_full(uart0, 250000, kDebugPin1, kDebugPin2);
-        gpio_init(kDebugPin2);
-        gpio_set_dir(kDebugPin2, GPIO_OUT);
-        gpio_put(kDebugPin2, 0);
+        stdio_uart_init_full(uart0, 460800, kDebugPin1, kDebugPin2);
     }
     else
     {
@@ -160,7 +162,7 @@ void main()
 
     // Clear console.
     {
-        printf("\033[2J\033[HProgram Started.\n\n");
+        printf("\033[2J\033[H");
     }
 
     // Blinking and multicore safety sleep.
@@ -179,7 +181,7 @@ void main()
 
     // Init printf queue.
     {
-        queue_init(&printf_buffer, sizeof(ImuSample), kMaxQueueSize);
+        queue_init(&gPrintfBuffer, sizeof(ImuSample), kMaxQueueSize);
     }
 
     // Imu initialization.
@@ -190,7 +192,7 @@ void main()
         gpio_disable_pulls(kImuInterruptPin);
         gpio_pull_up(kImuInterruptPin);
         // Imu Spibus init.
-        spi_init(spi0, 10 * 1000 * 1000);
+        spi_init(spi0, 1 * 1000 * 1000);
         spi_set_format(spi0, 8, SPI_CPOL_1, SPI_CPHA_1, SPI_MSB_FIRST);
         gpio_set_function(kImuRxPin, GPIO_FUNC_SPI);
         gpio_set_function(kImuCsPin, GPIO_FUNC_SPI);
@@ -202,32 +204,40 @@ void main()
 
     while (true)
     {
-        // Wait until kImuInterruptPin pin is low.
-        if (gpio_get(kImuInterruptPin) == true)
+        // Wait until user input 'r'.
+        if (getchar() != 'r') {
             continue;
+        }
+        gRecording = true;
 
-        // Record time (done right after Imu interrupt).
-        absolute_time_t curr_time = get_absolute_time();
+        absolute_time_t start_time = get_absolute_time();
 
-        // Read from IMU.
-        uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
-        spi_out[0] = kAccelDataXhRegister | 0x80;
-        spi_write_read_blocking(spi0, spi_out, spi_in, 13);
-
-        // Parse IMU bits.
-        ImuSample data = {curr_time,
-                          (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
-                          (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
-
-        // Record IMU data.
-        if (queue_try_add(&printf_buffer, &data) == false)
+        // Main loop.
+        while (true)
         {
-            while (true)
+            // Wait until kImuInterruptPin pin is low.
+            if (gpio_get(kImuInterruptPin) == true)
+                continue;
+
+            // Record time (done right after Imu interrupt).
+            absolute_time_t curr_time = get_absolute_time() - start_time;
+
+            // Read from IMU.
+            uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
+            spi_out[0] = kAccelDataXhRegister | 0x80;
+            spi_write_read_blocking(spi0, spi_out, spi_in, 13);
+
+            // Parse IMU bits.
+            ImuSample data = {curr_time,
+                              (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
+                              (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
+
+            // Log IMU data.
+            if (queue_try_add(&gPrintfBuffer, &data) == false)
             {
-                gpio_put(kLedPin, true);
+                gRecording = false;
+                break; // If buffer full.
             }
         }
-
-        sleep_us(20);
     }
 }
