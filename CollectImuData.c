@@ -70,7 +70,7 @@ void ImuInitRegisters()
     spi_out[1] = 0b10010001; // RTC clock input is NOT required.
     spi_write_read_blocking(spi0, spi_out, in_buf, 2);
     spi_out[0] = kAccelConfig0;
-    spi_out[1] = 0b00000001; // Keep FS at +-16g, increase IMU freq from 1kHz to 32kHz.
+    spi_out[1] = 0b00000100; // Keep FS at +-16g, increase IMU freq from 1kHz to 4kHz.
     spi_write_read_blocking(spi0, spi_out, in_buf, 2);
     spi_out[0] = kGyroConfig0;
     spi_out[1] = 0b01000110; // Change FS from +-2000dps to +-500dps.
