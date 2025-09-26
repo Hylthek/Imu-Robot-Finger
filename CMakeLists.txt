@@ -40,7 +40,7 @@ add_executable(CollectImuData
     )
 
 # pull in common dependencies
-target_link_libraries(CollectImuData pico_stdlib hardware_spi hardware_pwm pico_multicore)
+target_link_libraries(CollectImuData pico_stdlib hardware_spi pico_multicore)
 
 if (PICO_CYW43_SUPPORTED)
     target_link_libraries(CollectImuData pico_cyw43_arch_none)
