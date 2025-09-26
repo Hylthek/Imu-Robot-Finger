@@ -1,4 +1,3 @@
-close all;
 format compact;
 clc;
 
@@ -6,22 +5,26 @@ clc;
 
 % Plot several views of TestImuData.csv (IMU time series)
 
-fname = 'Shirt.csv';
+fname = 'jeans';
+section_to_view = 1;
 set(0, 'DefaultFigureWindowStyle', 'normal');
 set(0, 'DefaultFigurePosition', get(0, 'ScreenSize'));
 
-%% Load
+%% Load and Section
 opts = detectImportOptions(fname,'NumHeaderLines',0,'VariableNamingRule','preserve');
 T = readtable(fname, opts);
 
-% Columns by index (avoids header quirks)
-t_us   = T{:,1};  % Time (microseconds)
-ax_raw = T{:,2};  % Accel X (raw)
-ay_raw = T{:,3};  % Accel Y
-az_raw = T{:,4};  % Accel Z
-gx_raw = T{:,5};  % Gyro X (raw)
-gy_raw = T{:,6};  % Gyro Y
-gz_raw = T{:,7};  % Gyro Z
+% Remove samples where time difference is negative (and following samples)
+t_us = T{:,1};  % Time (microseconds)
+sections = [0 find(diff(t_us) < 0) numel(t_us)];
+fprintf("Viewing Section %d of %d in file '%s'\n", section_to_view, numel(sections)-1, fname);
+t_us   = T{sections(section_to_view)+1:sections(section_to_view + 1),1};
+ax_raw = T{sections(section_to_view)+1:sections(section_to_view + 1),2};
+ay_raw = T{sections(section_to_view)+1:sections(section_to_view + 1),3};
+az_raw = T{sections(section_to_view)+1:sections(section_to_view + 1),4};
+gx_raw = T{sections(section_to_view)+1:sections(section_to_view + 1),5};
+gy_raw = T{sections(section_to_view)+1:sections(section_to_view + 1),6};
+gz_raw = T{sections(section_to_view)+1:sections(section_to_view + 1),7};
 
 %% Convert units
 t = (t_us - t_us(1)) * 1e-6;   % seconds from start
@@ -42,11 +45,11 @@ fs = 1/dt;
 
 fprintf('Samples: %d | Duration: %.2f s | fs ≈ %.2f Hz\n', numel(t), t(end)-t(1), fs);
 
-dt_all = diff(t);
-fprintf('dt min: %.6f s | dt max: %.6f s\n', min(dt_all), max(dt_all));
+dt_all = diff(t) * 1000000;
+fprintf('dt min: %.6f us | dt max: %.6f us\n', min(dt_all), max(dt_all));
 
 %% Figure 1: Acceleration (3-axis)
-figure('Name', [fname ' - Acceleration (3-axis)'], 'Color', 'w', 'WindowStyle', 'docked');
+figure('Name', 'Acceleration (3-axis)', 'Color', 'w', 'WindowStyle', 'docked');
 tgroup = uitabgroup;
 
 tab1 = uitab(tgroup, 'Title', 'A_x');
@@ -75,7 +78,7 @@ legend(ax4, 'A_x','A_y','A_z');
 title(ax4, 'All Axes'); ylim(ax4, [-16 16]);
 
 %% Figure 2: Gyroscope (3-axis) — docked tabs
-figure('Name', [fname ' - Gyroscope (3-axis)'], 'Color', 'w', 'WindowStyle', 'docked');
+figure('Name', 'Gyroscope (3-axis)', 'Color', 'w', 'WindowStyle', 'docked');
 tg = uitabgroup;
 
 tab1 = uitab(tg, 'Title', 'G_x');
@@ -104,11 +107,12 @@ legend(ax4, 'G_x','G_y','G_z');
 title(ax4, 'All Axes');
 
 %% Figure 3: Spectrograms (Acceleration)
-window = hamming(256);
-number_of_points_overlap = 128;
+window_val = 64;
+window = hamming(window_val);
+number_of_points_overlap = window_val*3/4;
 number_of_points_fft = 512;
 
-figure('Name',[fname ' - Acceleration Spectrograms'],'Color','w', 'WindowStyle', 'docked');
+figure('Name','Acceleration Spectrograms','Color','w', 'WindowStyle', 'docked');
 tiledlayout(2,2,'Padding','compact','TileSpacing','compact');
 nexttile;
 spectrogram(ax - mean(ax,'omitnan'), window, number_of_points_overlap, number_of_points_fft, fs, 'yaxis');
