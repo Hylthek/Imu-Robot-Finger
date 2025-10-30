@@ -108,9 +108,6 @@ bool gRecording = false;
 // Secondary core.
 void secondary_core_main()
 {
-    // Print csv header.
-    printf("Time (microseconds), Acceleration X (divide by 2048 to get Gs), Acceleration Y, Acceleration Z, Gyro X (divide by 65.5 to get degrees/sec), Gyro Y, Gyro Z\n");
-
     ImuSample data = {0};
     while (true)
     {
@@ -148,7 +145,7 @@ void main()
     // Init debug printfs and gpios.
     if (true)
     {
-        stdio_uart_init_full(uart0, 460800, kDebugPin1, kDebugPin2);
+        stdio_uart_init_full(uart0, 250000, kDebugPin1, kDebugPin2);
     }
     else
     {
