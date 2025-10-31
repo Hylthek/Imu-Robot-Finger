@@ -112,25 +112,30 @@ void secondary_core_main()
     while (true)
     {
         // Continue if buffer empty.
-        if (queue_try_remove(&gPrintfBuffer, &data) == false) {
-            gpio_put(kLedPin, false);
+        if (queue_get_level(&gPrintfBuffer) == 0)
             continue;
-        }
 
         // Blink task.
-        static absolute_time_t last_blink_u = 0;
-        int blink_speed = 100 * queue_get_level(&gPrintfBuffer) / kMaxQueueSize + 1; // Value ranges 1-10.
-        int blink_delay_u = 3000000 / blink_speed;
-        if (get_absolute_time() > last_blink_u + blink_delay_u)
-        {
-            gpio_put(kLedPin, !gpio_get(kLedPin));
-            last_blink_u = get_absolute_time();
-        }
-        if (gRecording == false)
-            gpio_put(kLedPin, true);
+        // static absolute_time_t last_blink_u = 0;
+        // int blink_speed = 100 * queue_get_level(&gPrintfBuffer) / kMaxQueueSize + 1; // Value ranges 1-10.
+        // int blink_delay_u = 3000000 / blink_speed;
+        // if (get_absolute_time() > last_blink_u + blink_delay_u)
+        // {
+        //     gpio_put(kLedPin, !gpio_get(kLedPin));
+        //     last_blink_u = get_absolute_time();
+        // }
+        // if (gRecording == false)
+        //     gpio_put(kLedPin, true);
 
-        // Print in csv format.
-        printf("%" PRId64 ", %10d, %10d, %10d, %10d, %10d, %10d\n", data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+        // Get a chunk of data.
+        const int fwrite_buff_size = 2000;
+        ImuSample fwrite_buffer[fwrite_buff_size];
+        int num_to_print = MIN(queue_get_level(&gPrintfBuffer), fwrite_buff_size);
+        for (size_t i = 0; i < num_to_print; i++)
+            queue_try_remove(&gPrintfBuffer, &fwrite_buffer[i]);
+
+        // Print in binary format.
+        fwrite(&fwrite_buffer, sizeof(ImuSample), num_to_print, stdout);
     }
 }
 
@@ -145,7 +150,12 @@ void main()
     // Init debug printfs and gpios.
     if (true)
     {
-        stdio_uart_init_full(uart0, 250000, kDebugPin1, kDebugPin2);
+        // stdio_uart_init_full(uart0, 250000, kDebugPin1, kDebugPin2);
+        stdio_init_all();
+        while (stdio_usb_connected() == false)
+        {
+            sleep_ms(100);
+        }
     }
     else
     {
@@ -202,10 +212,12 @@ void main()
     while (true)
     {
         // Wait until user input 'r'.
-        if (getchar() != 'r') {
+        if (getchar() != 'r')
+        {
             continue;
         }
         gRecording = true;
+        gpio_put(kLedPin, true);
 
         absolute_time_t start_time = get_absolute_time();
 
@@ -233,6 +245,7 @@ void main()
             if (queue_try_add(&gPrintfBuffer, &data) == false)
             {
                 gRecording = false;
+                gpio_put(kLedPin, false);
                 break; // If buffer full.
             }
         }

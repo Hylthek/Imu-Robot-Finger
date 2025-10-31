@@ -40,11 +40,10 @@ add_executable(CollectImuData
     )
 
 # pull in common dependencies
-target_link_libraries(CollectImuData pico_stdlib hardware_spi pico_multicore)
+target_link_libraries(CollectImuData pico_stdlib hardware_spi pico_multicore pico_stdio_usb)
 
-if (PICO_CYW43_SUPPORTED)
-    target_link_libraries(CollectImuData pico_cyw43_arch_none)
-endif()
+# Change macro for better USB throughput.
+target_compile_definitions(CollectImuData PRIVATE PICO_STDIO_USB_STDOUT_BUFFER_SIZE=16384)
 
 # create map/bin/hex file etc.
 pico_add_extra_outputs(CollectImuData)
