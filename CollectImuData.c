@@ -14,7 +14,6 @@ enum
     kImuSckPin = 18,
     kImuTxPin = 19,
     kImuInterruptPin = 15,
-    kAccelDataXhRegister = 0x1f,
     kImuClkinPin = 21,
     kLedPin = PICO_DEFAULT_LED_PIN, // 25.
     kDebugPin1 = 0,
@@ -233,7 +232,7 @@ void main()
 
             // Read from IMU.
             uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
-            spi_out[0] = kAccelDataXhRegister | 0x80;
+            spi_out[0] = kAccelDataX0 | 0x80;
             spi_write_read_blocking(spi0, spi_out, spi_in, 13);
 
             // Parse IMU bits.
