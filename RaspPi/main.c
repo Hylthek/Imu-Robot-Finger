@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -7,8 +8,8 @@
 #include <linux/spi/spidev.h>
 #include <stdlib.h> // Required for exit()
 #include <sys/queue.h>
-#include <gpiod.h>
 #include <time.h>
+#include <pigpio.h>
 
 enum
 {
@@ -57,21 +58,21 @@ int spi_open(const char *device, int mode)
     return file_desc;
 }
 
-// Function to perform SPI transfer. Returns
+// Function to perform SPI transfer.
 int spi_transfer(int file_desc, uint8_t *tx_buffer, uint8_t *rx_buffer, size_t len)
 {
     struct spi_ioc_transfer spi_transfer = {
         .tx_buf = (unsigned long)tx_buffer,
         .rx_buf = (unsigned long)rx_buffer,
         .len = len,
-        .speed_hz = 1000000, // Example speed: 1 MHz
+        .speed_hz = 200000,
         .bits_per_word = 8,
     };
 
     return ioctl(file_desc, SPI_IOC_MESSAGE(1), &spi_transfer);
 }
 
-// One-time writes to IMU config-type registers.
+// One-time writes to IMU config-type registers. NOT OPTIONAL.
 void ImuInitRegisters(int file_desc)
 {
     // Do some one-time SPI writes.
@@ -94,7 +95,7 @@ void ImuInitRegisters(int file_desc)
     spi_out[1] = 0b10010001; // RTC clock input is NOT required.
     spi_transfer(file_desc, spi_out, in_buf, 2);
     spi_out[0] = kAccelConfig0;
-    spi_out[1] = 0b00000100; // Keep FS at +-16g, increase IMU freq from 1kHz to 4kHz.
+    spi_out[1] = 0b00000100; // Keep FS at +-16g, increase IMU freq from 1kHz to 1kHz.
     spi_transfer(file_desc, spi_out, in_buf, 2);
     spi_out[0] = kGyroConfig0;
     spi_out[1] = 0b01000110; // Change FS from +-2000dps to +-500dps.
@@ -131,42 +132,30 @@ int main(void)
     // Init spi device.
     const char *device_name = "/dev/spidev0.0"; // Use /dev/spidev0.1 for the second chip select
     int spi_file_desc;
-    int spi_mode = 0;
+    int spi_mode = 3;
     spi_file_desc = spi_open(device_name, spi_mode);
     if (spi_file_desc < 0)
         perror("Cant open SPI device.");
+    ImuInitRegisters(spi_file_desc);
 
     // Init IMU interrupt pin.
-    const char *chipname = "gpiochip0";
-    unsigned int line_num = 25; // GPIO line number (e.g., GPIO17)
-    struct gpiod_chip *chip = gpiod_chip_open_by_name(chipname);
-    if (!chip)
-    {
-        perror("Open chip failed");
+    if (gpioInitialise() < 0) {
+        perror("pigpio failed");
         return 1;
     }
-    struct gpiod_line *line = gpiod_chip_get_line(chip, line_num);
-    if (!line)
-    {
-        perror("Get line failed");
-        gpiod_chip_close(chip);
-        return 1;
-    }
-    if (gpiod_line_request_input(line, "ImuRobotFinger") < 0)
-    {
-        perror("Input request failed.");
-        gpiod_chip_close(chip);
-        return 1;
-    }
-
+    const unsigned PIN = 25;
+    gpioSetMode(PIN, PI_INPUT);
+    gpioSetPullUpDown(PIN, PI_PUD_UP);
+    
     // Main loop.
     while (1)
     {
-        while (gpiod_line_get_value(line) == 1)
-        {
-        }
+        if (gpioRead(PIN) == 1)
+            continue;
 
-        printf("gpio line low!\n");
+        static int count = 999;
+        if (++count == 1000)
+            count = 0;
 
         // Get current time.
         struct timespec curr_time;
@@ -174,8 +163,8 @@ int main(void)
 
         // Perform the SPI transfer.
         uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
-        spi_out[0] = kAccelDataX0 | 0x80;
-        if (spi_transfer(spi_file_desc, spi_out, spi_in, sizeof(spi_out)) == -1)
+        spi_out[0] = 0x1f | 0x80;
+        if (spi_transfer(spi_file_desc, spi_out, spi_in, 13) == -1)
         {
             perror("SPI transfer failed");
             close(spi_file_desc);
@@ -183,13 +172,15 @@ int main(void)
         }
 
         // Parse IMU bits.
+
         ImuSample data = {(curr_time.tv_sec - start_time.tv_sec) +
                               (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
                           (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
                           (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
 
         // Print received data
-        printf("Received: t = %f, ax = %d, ay = %d, az = %d, gx = %d, gy = %d, gz = %d\n",
-               data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+        if (count == 999)
+            printf("Received: t = %f, ax = %d, ay = %d, az = %d, gx = %d, gy = %d, gz = %d\n",
+                   data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
     }
 }
