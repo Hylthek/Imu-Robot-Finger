@@ -43,8 +43,10 @@ enum
 FILE *imu_data_csv = NULL;
 
 // Handle SIGINT.
-void HandleSigInt(int signal) {
-    if (imu_data_csv != NULL) {
+void HandleSigInt(int signal)
+{
+    if (imu_data_csv != NULL)
+    {
         fclose(imu_data_csv); // Close the file
         printf("File closed.\n");
     }
@@ -147,7 +149,8 @@ int main(void)
     struct sigaction sig_action;
     sig_action.sa_handler = HandleSigInt;
     sig_action.sa_flags = 0;
-    if (sigaction(SIGINT, &sig_action, NULL) == -1) {
+    if (sigaction(SIGINT, &sig_action, NULL) == -1)
+    {
         perror("Failed to set SIGINT handler");
         return 1;
     }
