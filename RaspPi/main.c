@@ -10,6 +10,7 @@
 #include <sys/queue.h>
 #include <time.h>
 #include <pigpio.h>
+#include <signal.h>
 
 enum
 {
@@ -37,6 +38,19 @@ enum
     kAccelConfig0 = 0x50,
     kGyroConfig0 = 0x4f,
 };
+
+// Globals.
+FILE *imu_data_csv = NULL;
+
+// Handle SIGINT.
+void HandleSigInt(int signal) {
+    if (imu_data_csv != NULL) {
+        fclose(imu_data_csv); // Close the file
+        printf("File closed.\n");
+    }
+    printf("Exiting Program.\n");
+    exit(0);
+}
 
 // Function to open the SPI device
 int spi_open(const char *device, int mode)
@@ -129,6 +143,15 @@ int main(void)
     struct timespec start_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
+    // Handle SIGINT.
+    struct sigaction sig_action;
+    sig_action.sa_handler = HandleSigInt;
+    sig_action.sa_flags = 0;
+    if (sigaction(SIGINT, &sig_action, NULL) == -1) {
+        perror("Failed to set SIGINT handler");
+        return 1;
+    }
+
     // Init spi device.
     const char *device_name = "/dev/spidev0.0"; // Use /dev/spidev0.1 for the second chip select
     int spi_file_desc;
@@ -139,14 +162,19 @@ int main(void)
     ImuInitRegisters(spi_file_desc);
 
     // Init IMU interrupt pin.
-    if (gpioInitialise() < 0) {
+    if (gpioInitialise() < 0)
+    {
         perror("pigpio failed");
         return 1;
     }
     const unsigned PIN = 25;
     gpioSetMode(PIN, PI_INPUT);
     gpioSetPullUpDown(PIN, PI_PUD_UP);
-    
+
+    // Create/open file.
+    FILE *imu_data_csv = fopen("imu_data.csv", "w");
+    fprintf(imu_data_csv, "Time, ax, ay, az, gx, gy, gz\n");
+
     // Main loop.
     while (1)
     {
@@ -178,9 +206,8 @@ int main(void)
                           (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
                           (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
 
-        // Print received data
-        if (count == 999)
-            printf("Received: t = %f, ax = %d, ay = %d, az = %d, gx = %d, gy = %d, gz = %d\n",
-                   data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+        // Log received data.
+        fprintf(imu_data_csv, "%f, %d, %d, %d, %d, %d, %d\n",
+                data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
     }
 }
