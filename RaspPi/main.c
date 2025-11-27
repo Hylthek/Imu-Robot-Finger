@@ -11,6 +11,8 @@
 #include <time.h>
 #include <pigpio.h>
 #include <signal.h>
+#include <poll.h>
+#include <errno.h>
 
 enum
 {
@@ -127,6 +129,27 @@ void ImuInitRegisters(int file_desc)
     spi_transfer(file_desc, spi_out, in_buf, 6);
 }
 
+// Check if there is stuff in stdin.
+bool stdin_has_data_poll(void)
+{
+    struct pollfd pfd;
+    pfd.fd = STDIN_FILENO;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+
+    int rv;
+    do
+    {
+        rv = poll(&pfd, 1, 0); /* timeout 0 => immediate return */
+    } while (rv == -1 && errno == EINTR);
+
+    if (rv > 0)
+    {
+        return (pfd.revents & POLLIN) != 0;
+    }
+    return false;
+}
+
 // Structs.
 typedef struct
 {
@@ -141,10 +164,6 @@ typedef struct
 
 int main(void)
 {
-    // Get the program start monotonic time.
-    struct timespec start_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-
     // Handle SIGINT.
     struct sigaction sig_action;
     sig_action.sa_handler = HandleSigInt;
@@ -174,43 +193,76 @@ int main(void)
     gpioSetMode(PIN, PI_INPUT);
     gpioSetPullUpDown(PIN, PI_PUD_UP);
 
-    // Create/open file.
-    FILE *imu_data_csv = fopen("imu_data.csv", "w");
-    fprintf(imu_data_csv, "Time, ax, ay, az, gx, gy, gz\n");
-
-    // Main loop.
+    // Record loop.
+    printf("Press enter to start and stop recording");
     while (1)
     {
-        if (gpioRead(PIN) == 1)
+        // Wait for record command.
+        if (stdin_has_data_poll() == false)
             continue;
+        fgets("discard", 99, stdin);
+        printf("Recording...");
 
-        static int count = 999;
-        if (++count == 1000)
-            count = 0;
+        // Create/open file.
+        const char kTempFileName[] = "temp.csv";
+        FILE *imu_data_csv = fopen(kTempFileName, "w");
+        fprintf(imu_data_csv, "Time, ax, ay, az, gx, gy, gz\n");
 
-        // Get current time.
-        struct timespec curr_time;
-        clock_gettime(CLOCK_MONOTONIC, &curr_time);
+        // Get the recording monotonic time at start.
+        struct timespec start_time;
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-        // Perform the SPI transfer.
-        uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
-        spi_out[0] = 0x1f | 0x80;
-        if (spi_transfer(spi_file_desc, spi_out, spi_in, 13) == -1)
+        // IMU loop.
+        while (1)
         {
-            perror("SPI transfer failed");
-            close(spi_file_desc);
-            exit(1);
+            // Wait for IMU interrupt.
+            if (gpioRead(PIN) == 1)
+                continue;
+
+            // Counter.
+            static int count = 999;
+            if (++count == 1000)
+                count = 0;
+
+            // Get current time.
+            struct timespec curr_time;
+            clock_gettime(CLOCK_MONOTONIC, &curr_time);
+
+            // Perform the SPI transfer.
+            uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
+            spi_out[0] = 0x1f | 0x80;
+            if (spi_transfer(spi_file_desc, spi_out, spi_in, 13) == -1)
+            {
+                perror("SPI transfer failed");
+                close(spi_file_desc);
+                exit(1);
+            }
+
+            // Parse IMU bits.
+            ImuSample data = {(curr_time.tv_sec - start_time.tv_sec) +
+                                  (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
+                              (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
+                              (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
+
+            // Log received data.
+            fprintf(imu_data_csv, "%f, %d, %d, %d, %d, %d, %d\n",
+                    data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+
+            // Check stdin buffer for recording stop command.
+            if (stdin_has_data_poll())
+            {
+                fgets("discard", 99, stdin);
+                break;
+            }
         }
 
-        // Parse IMU bits.
-
-        ImuSample data = {(curr_time.tv_sec - start_time.tv_sec) +
-                              (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
-                          (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
-                          (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
-
-        // Log received data.
-        fprintf(imu_data_csv, "%f, %d, %d, %d, %d, %d, %d\n",
-                data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+        // Name the file.
+        printf("Name your file: ");
+        char name[100] = {0};
+        fgets(name, 99, stdin);
+        if (rename(kTempFileName, name) == 0)
+            printf("File successfully renamed\n");
+        else
+            perror("rename");
     }
 }
