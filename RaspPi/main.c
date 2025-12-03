@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <errno.h>
+#include <stdbool.h>
 
 enum
 {
@@ -43,9 +44,16 @@ enum
 
 // Globals.
 FILE *imu_data_csv = NULL;
+volatile sig_atomic_t gGotSigInt = 0;
 
 // Handle SIGINT.
 void HandleSigInt(int signal)
+{
+    (void)signal;
+    gGotSigInt = 1;
+}
+
+void SafeExit()
 {
     if (imu_data_csv != NULL)
     {
@@ -113,7 +121,7 @@ void ImuInitRegisters(int file_desc)
     spi_out[1] = 0b10010001; // RTC clock input is NOT required.
     spi_transfer(file_desc, spi_out, in_buf, 2);
     spi_out[0] = kAccelConfig0;
-    spi_out[1] = 0b00000100; // Keep FS at +-16g, increase IMU freq from 1kHz to 1kHz.
+    spi_out[1] = 0b00000100; // Keep FS at +-16g, increase IMU freq from 1kHz to 4kHz.
     spi_transfer(file_desc, spi_out, in_buf, 2);
     spi_out[0] = kGyroConfig0;
     spi_out[1] = 0b01000110; // Change FS from +-2000dps to +-500dps.
@@ -193,26 +201,33 @@ int main(void)
     gpioSetMode(PIN, PI_INPUT);
     gpioSetPullUpDown(PIN, PI_PUD_UP);
 
+    printf("Program Initialized\n\n");
+
     // Record loop.
-    printf("Press enter to start and stop recording");
     while (1)
     {
-        // Wait for record command.
-        if (stdin_has_data_poll() == false)
-            continue;
-        fgets("discard", 99, stdin);
-        printf("Recording...");
+        // Intro message.
+        printf("Press enter to start and stop recording");
+        fflush(stdout);
 
+        // Wait for record command.
+        while (stdin_has_data_poll() == false)
+            if (gGotSigInt)
+                SafeExit();
+        char discard[100] = {0};
+        fgets(discard, 99, stdin);
+        
         // Create/open file.
         const char kTempFileName[] = "temp.csv";
         FILE *imu_data_csv = fopen(kTempFileName, "w");
         fprintf(imu_data_csv, "Time, ax, ay, az, gx, gy, gz\n");
-
+        
         // Get the recording monotonic time at start.
         struct timespec start_time;
         clock_gettime(CLOCK_MONOTONIC, &start_time);
-
+        
         // IMU loop.
+        printf("Recording...\n");
         while (1)
         {
             // Wait for IMU interrupt.
@@ -251,7 +266,8 @@ int main(void)
             // Check stdin buffer for recording stop command.
             if (stdin_has_data_poll())
             {
-                fgets("discard", 99, stdin);
+                char discard[100] = {0};
+                fgets(discard, 99, stdin);
                 break;
             }
         }
@@ -260,8 +276,10 @@ int main(void)
         printf("Name your file: ");
         char name[100] = {0};
         fgets(name, 99, stdin);
+        name[strcspn(name, "\n")] = '\0'; // Turn the last newline into a \0.
+        strcat(name, ".csv\0");
         if (rename(kTempFileName, name) == 0)
-            printf("File successfully renamed\n");
+            printf("File successfully renamed\n\n");
         else
             perror("rename");
     }

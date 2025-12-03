@@ -3,21 +3,24 @@
 #include <stdlib.h>
 #include <time.h>
 
-int main() {
+int main()
+{
     FILE *file;
     const char *filename = "test_speed.csv";
     const int num_entries = 1000000;
     clock_t start, end;
 
     file = fopen(filename, "w");
-    if (file == NULL) {
+    if (file == NULL)
+    {
         perror("Error opening file");
         return EXIT_FAILURE;
     }
 
     start = clock();
-    for (int i = 0; i < num_entries; i++) {
-        fprintf(file, "%d,%d,%d\n", i, i * 2, i * 3);
+    for (int i = 1000000; i < num_entries + 1000000; i++)
+    {
+        fprintf(file, "%d,%d,%d,%d,%d,%d,%d,%d,%d\n", i, i * 2, i * 3, i * 4, i * 5, i * 6, i * 7);
     }
     end = clock();
 
