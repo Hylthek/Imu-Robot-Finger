@@ -6,4 +6,4 @@ TeratermLogs.lnk
 laptop_libs/
 RaspPi/a.out
 RaspPi/a.exe
-RaspPi/test_speed.csv
+RaspPi/*.csv
