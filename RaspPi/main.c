@@ -14,6 +14,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <sched.h>
 
 enum
 {
@@ -91,7 +92,7 @@ int spi_transfer(int file_desc, uint8_t *tx_buffer, uint8_t *rx_buffer, size_t l
         .tx_buf = (unsigned long)tx_buffer,
         .rx_buf = (unsigned long)rx_buffer,
         .len = len,
-        .speed_hz = 200000,
+        .speed_hz = 1000000,
         .bits_per_word = 8,
     };
 
@@ -121,7 +122,7 @@ void ImuInitRegisters(int file_desc)
     spi_out[1] = 0b10010001; // RTC clock input is NOT required.
     spi_transfer(file_desc, spi_out, in_buf, 2);
     spi_out[0] = kAccelConfig0;
-    spi_out[1] = 0b00000100; // Keep FS at +-16g, increase IMU freq from 1kHz to 4kHz.
+    spi_out[1] = 0b00000110; // Keep FS at +-16g, increase IMU freq to 1kHz.
     spi_transfer(file_desc, spi_out, in_buf, 2);
     spi_out[0] = kGyroConfig0;
     spi_out[1] = 0b01000110; // Change FS from +-2000dps to +-500dps.
@@ -170,8 +171,21 @@ typedef struct
     int16_t gz;
 } ImuSample;
 
+volatile bool gIntNegEdge = false;
+void GpioInterruptCallback(int gpio, int level, uint32_t tick) {
+    if (gpio == 25 && level == false)
+        gIntNegEdge = true;
+}
+
 int main(void)
 {
+    // Set program priority.
+    struct sched_param param;
+    param.sched_priority = 99; // Maximum priority
+    if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
+        perror("Failed to set real-time scheduler");
+    }
+
     // Handle SIGINT.
     struct sigaction sig_action;
     sig_action.sa_handler = HandleSigInt;
@@ -200,6 +214,7 @@ int main(void)
     const unsigned PIN = 25;
     gpioSetMode(PIN, PI_INPUT);
     gpioSetPullUpDown(PIN, PI_PUD_UP);
+    gpioSetAlertFunc(PIN, GpioInterruptCallback);
 
     printf("Program Initialized\n\n");
 
@@ -231,18 +246,18 @@ int main(void)
         while (1)
         {
             // Wait for IMU interrupt.
-            if (gpioRead(PIN) == 1)
+            if (gIntNegEdge == false)
                 continue;
 
             // Counter.
             static int count = 999;
             if (++count == 1000)
-                count = 0;
+            count = 0;
 
             // Get current time.
             struct timespec curr_time;
             clock_gettime(CLOCK_MONOTONIC, &curr_time);
-
+            
             // Perform the SPI transfer.
             uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
             spi_out[0] = 0x1f | 0x80;
@@ -253,15 +268,27 @@ int main(void)
                 exit(1);
             }
 
+            // Post-SPI time.
+            struct timespec spi_time;
+            clock_gettime(CLOCK_MONOTONIC, &spi_time);
+
             // Parse IMU bits.
             ImuSample data = {(curr_time.tv_sec - start_time.tv_sec) +
                                   (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
                               (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
                               (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
 
+            // Post-parse time.
+            struct timespec parse_time;
+            clock_gettime(CLOCK_MONOTONIC, &parse_time);
+
             // Log received data.
             fprintf(imu_data_csv, "%f, %d, %d, %d, %d, %d, %d\n",
                     data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
+
+            // Post-log time.
+            struct timespec log_time;
+            clock_gettime(CLOCK_MONOTONIC, &log_time);
 
             // Check stdin buffer for recording stop command.
             if (stdin_has_data_poll())
@@ -270,6 +297,44 @@ int main(void)
                 fgets(discard, 99, stdin);
                 break;
             }
+
+            // Post-stdin time.
+            struct timespec stdin_time;
+            clock_gettime(CLOCK_MONOTONIC, &stdin_time);
+
+            // Declare prev time.
+            static struct timespec prev_time[5] = {0};
+
+            // Print debug info.
+            if (curr_time.tv_sec + curr_time.tv_nsec / 1e9 > prev_time[0].tv_sec + prev_time[0].tv_nsec / 1e9 + 0.0017)
+                printf("DEBUGINFO:\n"
+                    "prev:%9f +%9f +%9f +%9f +%9f = %9f\n"
+                    "curr:%9f +%9f +%9f +%9f +%9f =%9f\n"
+                    "diff:%9f\n\n",
+                    (prev_time[0].tv_sec - start_time.tv_sec)   + (prev_time[0].tv_nsec - start_time.tv_nsec) / 1e9,
+                    (prev_time[1].tv_sec - prev_time[0].tv_sec) + (prev_time[1].tv_nsec - prev_time[0].tv_nsec) / 1e9,
+                    (prev_time[2].tv_sec - prev_time[1].tv_sec) + (prev_time[2].tv_nsec - prev_time[1].tv_nsec) / 1e9,
+                    (prev_time[3].tv_sec - prev_time[2].tv_sec) + (prev_time[3].tv_nsec - prev_time[2].tv_nsec) / 1e9,
+                    (prev_time[4].tv_sec - prev_time[3].tv_sec) + (prev_time[4].tv_nsec - prev_time[3].tv_nsec) / 1e9,
+                    (prev_time[4].tv_sec - start_time.tv_sec)   + (prev_time[4].tv_nsec - start_time.tv_nsec) / 1e9,
+                    
+                    (curr_time.tv_sec - start_time.tv_sec) + (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
+                    (spi_time.tv_sec - curr_time.tv_sec) + (spi_time.tv_nsec - curr_time.tv_nsec) / 1e9,
+                    (parse_time.tv_sec - spi_time.tv_sec) + (parse_time.tv_nsec - spi_time.tv_nsec) / 1e9,
+                    (log_time.tv_sec - parse_time.tv_sec) + (log_time.tv_nsec - parse_time.tv_nsec) / 1e9,
+                    (stdin_time.tv_sec - log_time.tv_sec) + (stdin_time.tv_nsec - log_time.tv_nsec) / 1e9,
+                    (stdin_time.tv_sec - start_time.tv_sec) + (stdin_time.tv_nsec - start_time.tv_nsec) / 1e9,
+                    
+                    (curr_time.tv_sec - prev_time[0].tv_sec) + (curr_time.tv_nsec - prev_time[0].tv_nsec) / 1e9
+                );
+            prev_time[0] = curr_time;
+            prev_time[1] = spi_time;
+            prev_time[2] = parse_time;
+            prev_time[3] = log_time;
+            prev_time[4] = stdin_time;
+
+            // Unset IMU interrupt bool.
+            gIntNegEdge = false;
         }
 
         // Name the file.
