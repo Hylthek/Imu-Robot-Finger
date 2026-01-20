@@ -1,351 +1,184 @@
-#define _POSIX_C_SOURCE 199309L
-#include <stdio.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <string.h>
+// Basic includes.
 #include <fcntl.h>
-#include <sys/ioctl.h>
-#include <linux/spi/spidev.h>
-#include <stdlib.h> // Required for exit()
+#include <sched.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/queue.h>
 #include <time.h>
-#include <pigpio.h>
-#include <signal.h>
-#include <poll.h>
-#include <errno.h>
-#include <stdbool.h>
-#include <sched.h>
+#include <unistd.h>
 
-enum
-{
-    // IMU registers
-    // Note that some are defined only for reference as bulk reads exists.
-    kPwrMgmt0 = 0x4E,
-    kAccelDataX1 = 0x1F,
-    kAccelDataX0 = 0x20,
-    kAccelDataY1 = 0x21,
-    kAccelDataY0 = 0x22,
-    kAccelDataZ1 = 0x23,
-    kAccelDataZ0 = 0x24,
-    kGyroDataX1 = 0x25,
-    kGyroDataX0 = 0x26,
-    kGyroDataY1 = 0x27,
-    kGyroDataY0 = 0x28,
-    kGyroDataZ1 = 0x29,
-    kGyroDataZ0 = 0x2A,
-    kIntConfig1 = 0x64,
-    kIntSource0 = 0x65,
-    kIntConfig = 0x14,
-    kIntfConfig1 = 0x4d,
-    kRegBankSel = 0x76,
-    kIntfConfig5 = 0x7b, // Note, this is in bank 1 , not bank 0.
-    kAccelConfig0 = 0x50,
-    kGyroConfig0 = 0x4f,
-};
+#include "cli.h"
+#include "csv.h"
+#include "gpio.h"
+#include "imu.h"
+#include "priority_manager.h"
+#include "spi.h"
 
-// Globals.
-FILE *imu_data_csv = NULL;
-volatile sig_atomic_t gGotSigInt = 0;
+int main(void) {
+  // Makes program run with less stalling.
+  SetMaxPriority();
 
-// Handle SIGINT.
-void HandleSigInt(int signal)
-{
-    (void)signal;
-    gGotSigInt = 1;
-}
+  // Handle Ctrl+C terminal interrupt.
+  HandleSigInt();
 
-void SafeExit()
-{
-    if (imu_data_csv != NULL)
-    {
-        fclose(imu_data_csv); // Close the file
-        printf("File closed.\n");
-    }
-    printf("Exiting Program.\n");
-    exit(0);
-}
+  // Init spi device.
+  int spi_file_desc = InitSpiDevice();
 
-// Function to open the SPI device
-int spi_open(const char *device, int mode)
-{
-    int file_desc = open(device, O_RDWR);
-    if (file_desc < 0)
-    {
-        perror("Could not open SPI device");
-        return -1;
-    }
+  // Init IMU interrupt pin.
+  InitGpio();
 
-    // Set SPI mode (e.g., 0, 1, 2, or 3)
-    if (ioctl(file_desc, SPI_IOC_WR_MODE, &mode) == -1)
-    {
-        perror("Can't set SPI mode");
-        close(file_desc);
-        return -1;
-    }
-    return file_desc;
-}
+  // Status message.
+  printf("Program Initialized\n\n");
 
-// Function to perform SPI transfer.
-int spi_transfer(int file_desc, uint8_t *tx_buffer, uint8_t *rx_buffer, size_t len)
-{
-    struct spi_ioc_transfer spi_transfer = {
-        .tx_buf = (unsigned long)tx_buffer,
-        .rx_buf = (unsigned long)rx_buffer,
-        .len = len,
-        .speed_hz = 1000000,
-        .bits_per_word = 8,
-    };
+  // Record loop.
+  while (1) {
+    // Intro message.
+    printf("Press enter to start and stop recording");
+    fflush(stdout);
 
-    return ioctl(file_desc, SPI_IOC_MESSAGE(1), &spi_transfer);
-}
+    // Wait for record command.
+    while (stdin_has_data_poll() == false);
 
-// One-time writes to IMU config-type registers. NOT OPTIONAL.
-void ImuInitRegisters(int file_desc)
-{
-    // Do some one-time SPI writes.
-    uint8_t spi_out[6], in_buf[6];
+    // Flush stdin.
+    while (stdin_has_data_poll() == true) getchar();
 
-    // Bank 0.
-    spi_out[0] = kIntConfig1;
-    spi_out[1] = 0b01000000; // Initialize interrupts. Also set interrupt pulse to 100us->8us
-    spi_transfer(file_desc, spi_out, in_buf, 2);
-    spi_out[0] = kIntSource0;
-    spi_out[1] = 0b00001000; // Change interrupt output from "Reset done" to "UI data ready".
-    spi_transfer(file_desc, spi_out, in_buf, 2);
-    spi_out[0] = kIntConfig;
-    spi_out[1] = 0b00000010; // Set dataReady interrupt to push-pull.
-    spi_transfer(file_desc, spi_out, in_buf, 2);
-    spi_out[0] = kPwrMgmt0;
-    spi_out[1] = 0b00001111; // Place gyro and accel in low noise mode.
-    spi_transfer(file_desc, spi_out, in_buf, 2);
-    spi_out[0] = kIntfConfig1;
-    spi_out[1] = 0b10010001; // RTC clock input is NOT required.
-    spi_transfer(file_desc, spi_out, in_buf, 2);
-    spi_out[0] = kAccelConfig0;
-    spi_out[1] = 0b00000110; // Keep FS at +-16g, increase IMU freq to 1kHz.
-    spi_transfer(file_desc, spi_out, in_buf, 2);
-    spi_out[0] = kGyroConfig0;
-    spi_out[1] = 0b01000110; // Change FS from +-2000dps to +-500dps.
-    spi_transfer(file_desc, spi_out, in_buf, 2);
+    // Create/open file.
+    time_t now = time(NULL);
+    char date[20];
+    strftime(date, sizeof(date), "%Y-%m-%d_%H-%M-%S", localtime(&now));
+    char kTempFileName[50];
+    snprintf(kTempFileName, sizeof(kTempFileName), "data/data_%s.csv", date);
+    gImuDataCsv = fopen(kTempFileName, "w");
+    // Print csv headers.
+    fprintf(gImuDataCsv, "Time, ax, ay, az, gx, gy, gz\n");
 
-    // Bank 1.
-    spi_out[0] = kRegBankSel;
-    spi_out[1] = 0b00000001; // Change from bank 0 to bank 1.
-    spi_out[2] = kIntfConfig5;
-    spi_out[3] = 0b00000000; // Sets pin 9 function to Default (INT2).
-    spi_out[4] = kRegBankSel;
-    spi_out[5] = 0b00000000; // Change from bank 1 to bank 0.
-    spi_transfer(file_desc, spi_out, in_buf, 6);
-}
+    // Get the recording monotonic time at start.
+    struct timespec start_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-// Check if there is stuff in stdin.
-bool stdin_has_data_poll(void)
-{
-    struct pollfd pfd;
-    pfd.fd = STDIN_FILENO;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
+    // IMU loop.
+    printf("Recording...\n");
+    while (1) {
+      // Wait for IMU interrupt.
+      if (gIntNegEdge == false) continue;
 
-    int rv;
-    do
-    {
-        rv = poll(&pfd, 1, 0); /* timeout 0 => immediate return */
-    } while (rv == -1 && errno == EINTR);
+      // Counter.
+      static int count = 999;
+      if (++count == 1000) count = 0;
 
-    if (rv > 0)
-    {
-        return (pfd.revents & POLLIN) != 0;
-    }
-    return false;
-}
+      // Get current time.
+      struct timespec curr_time;
+      clock_gettime(CLOCK_MONOTONIC, &curr_time);
 
-// Structs.
-typedef struct
-{
-    double t;
-    int16_t ax;
-    int16_t ay;
-    int16_t az;
-    int16_t gx;
-    int16_t gy;
-    int16_t gz;
-} ImuSample;
+      // Perform the SPI transfer.
+      uint8_t spi_out[13] = {0},
+              spi_in[13] = {0};  // 13 is enough to read all IMU data.
+      spi_out[0] = 0x1f | 0x80;
+      if (spi_transfer(spi_file_desc, spi_out, spi_in, 13) == -1) {
+        perror("SPI transfer failed");
+        close(spi_file_desc);
+        exit(1);
+      }
 
-volatile bool gIntNegEdge = false;
-void GpioInterruptCallback(int gpio, int level, uint32_t tick) {
-    if (gpio == 25 && level == false)
-        gIntNegEdge = true;
-}
+      // Post-SPI time.
+      struct timespec spi_time;
+      clock_gettime(CLOCK_MONOTONIC, &spi_time);
 
-int main(void)
-{
-    // Set program priority.
-    struct sched_param param;
-    param.sched_priority = 99; // Maximum priority
-    if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
-        perror("Failed to set real-time scheduler");
-    }
+      // Parse IMU bits.
+      ImuSample_t data = {(curr_time.tv_sec - start_time.tv_sec) +
+                              (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
+                          (spi_in[1] << 8) + spi_in[2],
+                          (spi_in[3] << 8) + spi_in[4],
+                          (spi_in[5] << 8) + spi_in[6],
+                          (spi_in[7] << 8) + spi_in[8],
+                          (spi_in[9] << 8) + spi_in[10],
+                          (spi_in[11] << 8) + spi_in[12]};
 
-    // Handle SIGINT.
-    struct sigaction sig_action;
-    sig_action.sa_handler = HandleSigInt;
-    sig_action.sa_flags = 0;
-    if (sigaction(SIGINT, &sig_action, NULL) == -1)
-    {
-        perror("Failed to set SIGINT handler");
-        return 1;
-    }
+      // Post-parse time.
+      struct timespec parse_time;
+      clock_gettime(CLOCK_MONOTONIC, &parse_time);
 
-    // Init spi device.
-    const char *device_name = "/dev/spidev0.0"; // Use /dev/spidev0.1 for the second chip select
-    int spi_file_desc;
-    int spi_mode = 3;
-    spi_file_desc = spi_open(device_name, spi_mode);
-    if (spi_file_desc < 0)
-        perror("Cant open SPI device.");
-    ImuInitRegisters(spi_file_desc);
+      // Log received data.
+      fprintf(gImuDataCsv, "%f, %d, %d, %d, %d, %d, %d\n", data.t, data.ax,
+              data.ay, data.az, data.gx, data.gy, data.gz);
 
-    // Init IMU interrupt pin.
-    if (gpioInitialise() < 0)
-    {
-        perror("pigpio failed");
-        return 1;
-    }
-    const unsigned PIN = 25;
-    gpioSetMode(PIN, PI_INPUT);
-    gpioSetPullUpDown(PIN, PI_PUD_UP);
-    gpioSetAlertFunc(PIN, GpioInterruptCallback);
+      // Post-log time.
+      struct timespec log_time;
+      clock_gettime(CLOCK_MONOTONIC, &log_time);
 
-    printf("Program Initialized\n\n");
-
-    // Record loop.
-    while (1)
-    {
-        // Intro message.
-        printf("Press enter to start and stop recording");
-        fflush(stdout);
-
-        // Wait for record command.
-        while (stdin_has_data_poll() == false)
-            if (gGotSigInt)
-                SafeExit();
+      // Check stdin buffer for recording stop command.
+      if (stdin_has_data_poll()) {
         char discard[100] = {0};
         fgets(discard, 99, stdin);
-        
-        // Create/open file.
-        const char kTempFileName[] = "temp.csv";
-        FILE *imu_data_csv = fopen(kTempFileName, "w");
-        fprintf(imu_data_csv, "Time, ax, ay, az, gx, gy, gz\n");
-        
-        // Get the recording monotonic time at start.
-        struct timespec start_time;
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
-        
-        // IMU loop.
-        printf("Recording...\n");
-        while (1)
-        {
-            // Wait for IMU interrupt.
-            if (gIntNegEdge == false)
-                continue;
+        break;
+      }
 
-            // Counter.
-            static int count = 999;
-            if (++count == 1000)
-            count = 0;
+      // Post-stdin time.
+      struct timespec stdin_time;
+      clock_gettime(CLOCK_MONOTONIC, &stdin_time);
 
-            // Get current time.
-            struct timespec curr_time;
-            clock_gettime(CLOCK_MONOTONIC, &curr_time);
-            
-            // Perform the SPI transfer.
-            uint8_t spi_out[13] = {0}, spi_in[13] = {0}; // 13 is enough to read all IMU data.
-            spi_out[0] = 0x1f | 0x80;
-            if (spi_transfer(spi_file_desc, spi_out, spi_in, 13) == -1)
-            {
-                perror("SPI transfer failed");
-                close(spi_file_desc);
-                exit(1);
-            }
+      // Declare prev time.
+      static struct timespec prev_time[5] = {0};
 
-            // Post-SPI time.
-            struct timespec spi_time;
-            clock_gettime(CLOCK_MONOTONIC, &spi_time);
+      // Print debug info.
+      if (curr_time.tv_sec + curr_time.tv_nsec / 1e9 >
+          prev_time[0].tv_sec + prev_time[0].tv_nsec / 1e9 + 0.0017)
+        printf(
+            "DEBUGINFO:\n"
+            "prev:%9f +%9f +%9f +%9f +%9f = %9f\n"
+            "curr:%9f +%9f +%9f +%9f +%9f =%9f\n"
+            "diff:%9f\n\n",
+            (prev_time[0].tv_sec - start_time.tv_sec) +
+                (prev_time[0].tv_nsec - start_time.tv_nsec) / 1e9,
+            (prev_time[1].tv_sec - prev_time[0].tv_sec) +
+                (prev_time[1].tv_nsec - prev_time[0].tv_nsec) / 1e9,
+            (prev_time[2].tv_sec - prev_time[1].tv_sec) +
+                (prev_time[2].tv_nsec - prev_time[1].tv_nsec) / 1e9,
+            (prev_time[3].tv_sec - prev_time[2].tv_sec) +
+                (prev_time[3].tv_nsec - prev_time[2].tv_nsec) / 1e9,
+            (prev_time[4].tv_sec - prev_time[3].tv_sec) +
+                (prev_time[4].tv_nsec - prev_time[3].tv_nsec) / 1e9,
+            (prev_time[4].tv_sec - start_time.tv_sec) +
+                (prev_time[4].tv_nsec - start_time.tv_nsec) / 1e9,
 
-            // Parse IMU bits.
-            ImuSample data = {(curr_time.tv_sec - start_time.tv_sec) +
-                                  (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
-                              (spi_in[1] << 8) + spi_in[2], (spi_in[3] << 8) + spi_in[4], (spi_in[5] << 8) + spi_in[6],
-                              (spi_in[7] << 8) + spi_in[8], (spi_in[9] << 8) + spi_in[10], (spi_in[11] << 8) + spi_in[12]};
+            (curr_time.tv_sec - start_time.tv_sec) +
+                (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
+            (spi_time.tv_sec - curr_time.tv_sec) +
+                (spi_time.tv_nsec - curr_time.tv_nsec) / 1e9,
+            (parse_time.tv_sec - spi_time.tv_sec) +
+                (parse_time.tv_nsec - spi_time.tv_nsec) / 1e9,
+            (log_time.tv_sec - parse_time.tv_sec) +
+                (log_time.tv_nsec - parse_time.tv_nsec) / 1e9,
+            (stdin_time.tv_sec - log_time.tv_sec) +
+                (stdin_time.tv_nsec - log_time.tv_nsec) / 1e9,
+            (stdin_time.tv_sec - start_time.tv_sec) +
+                (stdin_time.tv_nsec - start_time.tv_nsec) / 1e9,
 
-            // Post-parse time.
-            struct timespec parse_time;
-            clock_gettime(CLOCK_MONOTONIC, &parse_time);
+            (curr_time.tv_sec - prev_time[0].tv_sec) +
+                (curr_time.tv_nsec - prev_time[0].tv_nsec) / 1e9);
+      prev_time[0] = curr_time;
+      prev_time[1] = spi_time;
+      prev_time[2] = parse_time;
+      prev_time[3] = log_time;
+      prev_time[4] = stdin_time;
 
-            // Log received data.
-            fprintf(imu_data_csv, "%f, %d, %d, %d, %d, %d, %d\n",
-                    data.t, data.ax, data.ay, data.az, data.gx, data.gy, data.gz);
-
-            // Post-log time.
-            struct timespec log_time;
-            clock_gettime(CLOCK_MONOTONIC, &log_time);
-
-            // Check stdin buffer for recording stop command.
-            if (stdin_has_data_poll())
-            {
-                char discard[100] = {0};
-                fgets(discard, 99, stdin);
-                break;
-            }
-
-            // Post-stdin time.
-            struct timespec stdin_time;
-            clock_gettime(CLOCK_MONOTONIC, &stdin_time);
-
-            // Declare prev time.
-            static struct timespec prev_time[5] = {0};
-
-            // Print debug info.
-            if (curr_time.tv_sec + curr_time.tv_nsec / 1e9 > prev_time[0].tv_sec + prev_time[0].tv_nsec / 1e9 + 0.0017)
-                printf("DEBUGINFO:\n"
-                    "prev:%9f +%9f +%9f +%9f +%9f = %9f\n"
-                    "curr:%9f +%9f +%9f +%9f +%9f =%9f\n"
-                    "diff:%9f\n\n",
-                    (prev_time[0].tv_sec - start_time.tv_sec)   + (prev_time[0].tv_nsec - start_time.tv_nsec) / 1e9,
-                    (prev_time[1].tv_sec - prev_time[0].tv_sec) + (prev_time[1].tv_nsec - prev_time[0].tv_nsec) / 1e9,
-                    (prev_time[2].tv_sec - prev_time[1].tv_sec) + (prev_time[2].tv_nsec - prev_time[1].tv_nsec) / 1e9,
-                    (prev_time[3].tv_sec - prev_time[2].tv_sec) + (prev_time[3].tv_nsec - prev_time[2].tv_nsec) / 1e9,
-                    (prev_time[4].tv_sec - prev_time[3].tv_sec) + (prev_time[4].tv_nsec - prev_time[3].tv_nsec) / 1e9,
-                    (prev_time[4].tv_sec - start_time.tv_sec)   + (prev_time[4].tv_nsec - start_time.tv_nsec) / 1e9,
-                    
-                    (curr_time.tv_sec - start_time.tv_sec) + (curr_time.tv_nsec - start_time.tv_nsec) / 1e9,
-                    (spi_time.tv_sec - curr_time.tv_sec) + (spi_time.tv_nsec - curr_time.tv_nsec) / 1e9,
-                    (parse_time.tv_sec - spi_time.tv_sec) + (parse_time.tv_nsec - spi_time.tv_nsec) / 1e9,
-                    (log_time.tv_sec - parse_time.tv_sec) + (log_time.tv_nsec - parse_time.tv_nsec) / 1e9,
-                    (stdin_time.tv_sec - log_time.tv_sec) + (stdin_time.tv_nsec - log_time.tv_nsec) / 1e9,
-                    (stdin_time.tv_sec - start_time.tv_sec) + (stdin_time.tv_nsec - start_time.tv_nsec) / 1e9,
-                    
-                    (curr_time.tv_sec - prev_time[0].tv_sec) + (curr_time.tv_nsec - prev_time[0].tv_nsec) / 1e9
-                );
-            prev_time[0] = curr_time;
-            prev_time[1] = spi_time;
-            prev_time[2] = parse_time;
-            prev_time[3] = log_time;
-            prev_time[4] = stdin_time;
-
-            // Unset IMU interrupt bool.
-            gIntNegEdge = false;
-        }
-
-        // Name the file.
-        printf("Name your file: ");
-        char name[100] = {0};
-        fgets(name, 99, stdin);
-        name[strcspn(name, "\n")] = '\0'; // Turn the last newline into a \0.
-        strcat(name, ".csv\0");
-        if (rename(kTempFileName, name) == 0)
-            printf("File successfully renamed\n\n");
-        else
-            perror("rename");
+      // Unset IMU interrupt bool.
+      gIntNegEdge = false;
     }
+
+    // Name the file.
+    printf("Name your file: ");
+    char name[100] = {0};
+    fgets(name, 99, stdin);
+    name[strcspn(name, "\n")] = '\0';  // Turn the last newline into a \0.
+    strcat(name, ".csv\0");
+    if (rename(kTempFileName, name) == 0)
+      printf("File successfully renamed\n\n");
+    else
+      perror("rename");
+  }
 }
