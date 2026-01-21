@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static int mock_gpio_states[32] = {0};  // Mock 32 GPIO pins
+int mock_gpio_states[32] = {0};  // Mock 32 GPIO pins
 
 int mock_gpioInitialise() {
   printf("[MOCK] GPIO Initialized\n");
@@ -40,6 +40,7 @@ int mock_gpioSetAlertFunc(unsigned pin, void (*callback)(int, int, uint32_t)) {
 }
 
 // The threadsafe variable and its routine.
+// Set by callback, reset by main.
 volatile bool gIntNegEdge = false;
 void GpioInterruptCallback(int gpio, int level, uint32_t tick) {
   if (gpio == 25 && level == false) gIntNegEdge = true;

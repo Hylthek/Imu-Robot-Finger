@@ -3,14 +3,15 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
-FILE* gImuDataCsv = NULL;
+FILE* gImuCsvFd = NULL;
 
 // Perform a safe exit that flushes the csv file.
 void SafeExit() {
-  if (gImuDataCsv != NULL) {
-    fclose(gImuDataCsv);  // Close the file
-    printf("File closed.\n");
+  if (gImuCsvFd != NULL) {
+    fclose(gImuCsvFd);  // Close the file
+    printf("\nFile closed.\n");
   }
   printf("Exiting Program.\n");
   fflush(stdout);
@@ -29,4 +30,13 @@ void HandleSigInt() {
   sig_action.sa_flags = 0;
   if (sigaction(SIGINT, &sig_action, NULL) == -1)
     perror("Failed to set SIGINT handler");
+}
+
+FILE* OpenCsv() {
+  time_t now = time(NULL);
+  char date[20];
+  strftime(date, sizeof(date), "%Y-%m-%d_%H-%M-%S", localtime(&now));
+  char kTempFileName[50];
+  snprintf(kTempFileName, sizeof(kTempFileName), "data/data_%s.csv", date);
+  return fopen(kTempFileName, "w");
 }

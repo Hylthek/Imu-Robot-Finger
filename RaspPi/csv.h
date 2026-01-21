@@ -1,13 +1,11 @@
-#ifndef CSV_H
-#define CSV_H
+#pragma once
 
 #include <signal.h>
 #include <stdio.h>
 
-extern FILE* gImuDataCsv;
+extern FILE* gImuCsvFd;
 
 void SigIntRoutine(int signal);
 void SafeExit();
 void HandleSigInt();
-
-#endif  // CSV_H
+FILE* OpenCsv();

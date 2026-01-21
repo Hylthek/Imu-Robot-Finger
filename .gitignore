@@ -6,4 +6,5 @@ TeratermLogs.lnk
 laptop_libs/
 RaspPi/a.out
 RaspPi/a.exe
-RaspPi/*.csv
+RaspPi/data/*.csv
+RaspPi/archive/*.csv

@@ -1,5 +1,4 @@
-#ifndef IMU_H
-#define IMU_H
+#pragma once
 
 #include <stdint.h>
 
@@ -40,5 +39,3 @@ typedef struct {
 } ImuSample_t;
 
 void ImuInitRegisters(int file_desc);
-
-#endif  // IMU_H

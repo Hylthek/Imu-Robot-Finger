@@ -1,5 +1,4 @@
-#ifndef MOCK_GPIO_H
-#define MOCK_GPIO_H
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -32,5 +31,3 @@ int mock_gpioSetAlertFunc(unsigned pin, void (*callback)(int, int, uint32_t));
 extern volatile bool gIntNegEdge;
 void GpioInterruptCallback(int gpio, int level, uint32_t tick);
 int InitGpio();
-
-#endif

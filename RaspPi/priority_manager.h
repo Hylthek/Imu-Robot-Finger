@@ -1,6 +1,3 @@
-#ifndef PRIORITY_MANAGER_H
-#define PRIORITY_MANAGER_H
+#pragma once
 
 int SetMaxPriority();
-
-#endif // PRIORITY_MANAGER_H

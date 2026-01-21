@@ -1,6 +1,3 @@
-#ifndef CLI_H
-#define CLI_H
+#pragma once
 
 bool stdin_has_data_poll(void);
-
-#endif // CLI_H
