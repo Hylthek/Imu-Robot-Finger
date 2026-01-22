@@ -2,4 +2,4 @@ all:
 	@echo TODO all
 
 clean:
-	@echo TODO clean
+	@rm -f bin/*
