@@ -1,9 +1,11 @@
 #include "csv.h"
 
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 FILE* gImuCsvFd = NULL;
 
@@ -33,10 +35,23 @@ void HandleSigInt() {
 }
 
 FILE* OpenCsv() {
+  // Get formatted date and time.
   time_t now = time(NULL);
-  char date[20];
-  strftime(date, sizeof(date), "%Y-%m-%d_%H-%M-%S", localtime(&now));
-  char kTempFileName[50];
-  snprintf(kTempFileName, sizeof(kTempFileName), "data/data_%s.csv", date);
-  return fopen(kTempFileName, "w");
+  char date_str[20];
+  strftime(date_str, sizeof(date_str), "%Y-%m-%d_%H-%M-%S", localtime(&now));
+
+  // Check for proper recording directory.
+  // This is a possible termination point.
+  const char recording_dir_name[50] = "imu_recordings_dir";
+  if (access(recording_dir_name, F_OK) == -1) {
+    printf("ERROR: There is no dir called \"%s/\"\n", recording_dir_name);
+    exit(1);
+  }
+
+  // Concatenate to final file name.
+  char file_name[200];
+  snprintf(file_name, sizeof(file_name), "%s/recording_%s.csv", recording_dir_name, date_str);
+
+  // Open file and return fd.
+  return fopen(file_name, "w");
 }

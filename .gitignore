@@ -5,5 +5,5 @@ MATLAB files/foo.m
 TeratermLogs.lnk
 laptop_libs/
 
-RaspPi/data/*.csv
-RaspPi/archive/*.csv
+**.csv
+**.out
