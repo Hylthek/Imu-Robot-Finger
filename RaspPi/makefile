@@ -1,23 +1,15 @@
-CC = gcc
-CFLAGS = -DMOCK_GPIO
-SRCS = main.c gpio.c spi.c imu.c cli.c csv.c priority_manager.c imu_time.c
-OUT = main.out
+NO_PRINT = --no-print-directory
 
-# .PHONY: all
+.PHONY: all clean imu_recorder_cli imu_kernel_isr
 
-all:$(OUT)
-	clear
-	@echo "Made"
+all: imu_recorder_cli imu_kernel_isr
 
-$(OUT): $(SRCS)
-	$(CC) $(CFLAGS) $(SRCS) -o $(OUT)
+imu_recorder_cli:
+	@$(MAKE) -C imu_recorder_cli $(NO_PRINT)
+
+imu_kernel_isr:
+	@$(MAKE) -C imu_kernel_isr $(NO_PRINT)
 
 clean:
-	@clear
-	@rm -f $(OUT)
-	@mv data/* archive/ 2>/dev/null || true
-	@echo "Cleant"
-
-run:
-	clear
-	@./$(OUT)
+	@$(MAKE) -C imu_recorder_cli clean $(NO_PRINT)
+	@$(MAKE) -C imu_kernel_isr clean $(NO_PRINT)
