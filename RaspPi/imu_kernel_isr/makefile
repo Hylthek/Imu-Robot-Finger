@@ -1,5 +1,5 @@
 all:
-	@echo all
+	@echo TODO all
 
 clean:
-	@echo clean
+	@echo TODO clean
