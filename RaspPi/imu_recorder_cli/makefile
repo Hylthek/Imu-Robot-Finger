@@ -10,3 +10,6 @@ $(OUT): $(SRCS)
 
 clean:
 	rm -f $(OUT)
+
+run:
+	./bin/main.out
