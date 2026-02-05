@@ -1,5 +1,6 @@
 #include "gpio.h"
 
+#include <pigpio.h>
 #include <stdbool.h>
 #include <stdint.h>
 
