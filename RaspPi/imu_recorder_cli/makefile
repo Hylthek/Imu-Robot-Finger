@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -DMOCK_GPIO
+CFLAGS =
 SRCS = src/*.c
 OUT = bin/main.out
 
