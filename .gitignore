@@ -1,9 +1,4 @@
-.vscode/
-build/
-MATLAB files/data*
-MATLAB files/foo.m
-TeratermLogs.lnk
-laptop_libs/
+MATLAB files/
 
 **.csv
 **.out
