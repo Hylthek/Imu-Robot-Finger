@@ -1,7 +1,7 @@
 # filepath: /home/calvinsmith/Documents/Imu-Robot-Finger/RaspPi/imu_recorder_cli/makefile
 CC = gcc
 CFLAGS = #-DMOCK_GPIO
-LDFLAGS = -lpigpio
+LDFLAGS = -lgpiod
 SRCS = src/*.c
 OUT = bin/main.out
 

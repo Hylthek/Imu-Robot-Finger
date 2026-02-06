@@ -1,21 +1,26 @@
 // Basic includes.
+#include <gpiod.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <unistd.h>
 
 #include "cli.h"
 #include "csv.h"
-#include "gpio.h"
 #include "imu.h"
 #include "imu_time.h"
+#include "libgpiod_example_read.h"
 #include "priority_manager.h"
 #include "spi.h"
+
+#define CHIP_NAME "/dev/gpiochip0"  // GPIO chip device
+#define LINE_NUM 24                 // GPIO line number (adjust as needed)
+#define TOGGLE_DELAY 1              // Delay in seconds between toggles
 
 int main(void) {
   SetMaxPriority();                   // Makes program run with less stalling.
   HandleSigInt();                     // Handle Ctrl+C terminal interrupt.
   InitSpiDevice();                    // Init spi device.
-  InitGpio();                         // Init IMU interrupt pin.
+  setup(25);                         // Init IMU interrupt pin.
   printf("Program Initialized\n\n");  // Status message.
 
   // Record loop.
@@ -48,7 +53,7 @@ int main(void) {
       }
 
       // Wait for IMU interrupt.
-      if (gIntNegEdge == false) continue;
+      if (read_pin() == GPIOD_LINE_VALUE_INACTIVE) continue;
       // Var will be reset after loop finishes.
 
       // Counter.
@@ -82,9 +87,6 @@ int main(void) {
       PrintDebugTimes();
       // Update prev timespecs.
       UpdatePrevTimespecs();
-
-      // Unset IMU interrupt bool.
-      gIntNegEdge = false;
     }
     printf("RECORDING ENDED\n\n");
   }
