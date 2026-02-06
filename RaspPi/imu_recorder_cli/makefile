@@ -14,4 +14,4 @@ clean:
 	rm -f $(OUT)
 
 run:
-	./bin/main.out
+	sudo ./bin/main.out

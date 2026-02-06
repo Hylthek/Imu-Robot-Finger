@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // SPDX-FileCopyrightText: 2023 Kent Gibson <warthog618@gmail.com>
 
-/* Minimal example of reading a single line. */
+/* Minimal example of watching for rising edges on a single line. */
+
+#include "libgpiod_interrupt.h"
 
 #include <errno.h>
 #include <gpiod.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "libgpiod_example_read.h"
 
-/* Request a line as input. */
+/* Request a line as input with edge detection. */
 static struct gpiod_line_request* request_input_line(const char* chip_path,
                                                      unsigned int offset,
                                                      const char* consumer) {
@@ -30,6 +31,7 @@ static struct gpiod_line_request* request_input_line(const char* chip_path,
     goto close_chip;
 
   gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT);
+  gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING);
 
   line_cfg = gpiod_line_config_new();
   if (!line_cfg)
@@ -64,47 +66,50 @@ close_chip:
   return request;
 }
 
-static int print_value(unsigned int offset, enum gpiod_line_value value) {
-  if (value == GPIOD_LINE_VALUE_ACTIVE)
-    printf("%d=Active\n", offset);
-  else if (value == GPIOD_LINE_VALUE_INACTIVE) {
-    printf("%d=Inactive\n", offset);
-  } else {
-    fprintf(stderr, "error reading value: %s\n",
-            strerror(errno));
-    return EXIT_FAILURE;
-  }
-
-  return EXIT_SUCCESS;
-}
-
 struct gpiod_line_request* request;
-unsigned int gLineOffset;
-
-int setup(const unsigned int line_offset) {
-  gLineOffset = line_offset;
-  
+struct gpiod_edge_event_buffer* event_buffer;
+const int event_buf_size = 1;
+int GpioSetup(const unsigned int line_offset) {
   /* Example configuration - customize to suit your situation. */
   static const char* const chip_path = "/dev/gpiochip0";
 
-  enum gpiod_line_value value;
-  int ret;
-
-  request = request_input_line(chip_path, gLineOffset, "get-line-value");
+  request = request_input_line(chip_path, line_offset, "watch-line-value");
   if (!request) {
     fprintf(stderr, "failed to request line: %s\n", strerror(errno));
     return EXIT_FAILURE;
   }
 
-  // value = gpiod_line_request_get_value(request, gLineOffset);
-  // ret = print_value(line_offset, value);
+  /*
+   * A larger buffer is an optimisation for reading bursts of events from
+   * the kernel, but that is not necessary in this case, so 1 is fine.
+   */
+  event_buffer = gpiod_edge_event_buffer_new(event_buf_size);
+  if (!event_buffer) {
+    fprintf(stderr, "failed to create event buffer: %s\n",
+            strerror(errno));
+    return EXIT_FAILURE;
+  }
 
-  /* not strictly required here, but if the app wasn't exiting... */
-  // gpiod_line_request_release(request);
-
-  return ret;
+  return 0;
 }
 
-enum gpiod_line_value read_pin() {
-  return gpiod_line_request_get_value(request, gLineOffset);
+bool GpioGetEvent() {
+  const int64_t timeout = 0;
+  int ret = gpiod_line_request_wait_edge_events(request, timeout);
+  // int ret = gpiod_line_request_read_edge_events(request, event_buffer, event_buf_size);
+  if (ret == -1) {
+    fprintf(stderr, "error reading edge events: %s\n", strerror(errno));
+    return EXIT_FAILURE;
+  }
+  // If no events i.e. timed out.
+  if (ret == 0)
+    return false;
+  // If event detected.
+  if (ret == 1) {
+    struct gpiod_edge_event* event;
+    // Pop event.
+    const unsigned long idx = 0;
+    event = gpiod_edge_event_buffer_get_event(event_buffer, idx);
+    return true;
+  }
 }

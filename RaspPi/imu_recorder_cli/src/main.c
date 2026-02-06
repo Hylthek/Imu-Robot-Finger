@@ -8,7 +8,7 @@
 #include "csv.h"
 #include "imu.h"
 #include "imu_time.h"
-#include "libgpiod_example_read.h"
+#include "libgpiod_interrupt.h"
 #include "priority_manager.h"
 #include "spi.h"
 
@@ -20,7 +20,7 @@ int main(void) {
   SetMaxPriority();                   // Makes program run with less stalling.
   HandleSigInt();                     // Handle Ctrl+C terminal interrupt.
   InitSpiDevice();                    // Init spi device.
-  setup(25);                         // Init IMU interrupt pin.
+  GpioSetup(25);                         // Init IMU interrupt pin.
   printf("Program Initialized\n\n");  // Status message.
 
   // Record loop.
@@ -53,7 +53,7 @@ int main(void) {
       }
 
       // Wait for IMU interrupt.
-      if (read_pin() == GPIOD_LINE_VALUE_INACTIVE) continue;
+      if (GpioGetEvent() == false) continue;
       // Var will be reset after loop finishes.
 
       // Counter.
