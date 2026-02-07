@@ -20,7 +20,7 @@ int main(void) {
   SetMaxPriority();                   // Makes program run with less stalling.
   HandleSigInt();                     // Handle Ctrl+C terminal interrupt.
   InitSpiDevice();                    // Init spi device.
-  GpioSetup(25);                         // Init IMU interrupt pin.
+  GpioSetup(25);                      // Init IMU interrupt pin.
   printf("Program Initialized\n\n");  // Status message.
 
   // Record loop.
@@ -42,6 +42,7 @@ int main(void) {
 
     // Get the recording monotonic time at start.
     GetMonotonic(&gTimes.start_time);
+    gPrevTimes.curr_time = gTimes.start_time;
 
     // IMU loop.
     printf("Recording...\n");
@@ -56,7 +57,7 @@ int main(void) {
       if (GpioGetEvent() == false) continue;
       // Var will be reset after loop finishes.
 
-      // Counter.
+      // Counter [0, 999].
       static int count = 999;
       if (++count == 1000) count = 0;
 
@@ -84,7 +85,7 @@ int main(void) {
       GetMonotonic(&gTimes.stdin_time);
 
       // Print debug info.
-      PrintDebugTimes();
+      PrintDebugTimes(1.5); // 1.5ms is the lower cutoff to print debug info.
       // Update prev timespecs.
       UpdatePrevTimespecs();
     }

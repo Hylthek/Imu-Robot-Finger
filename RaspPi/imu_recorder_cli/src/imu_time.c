@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include "imu_time.h"
 
 #include <math.h>
@@ -17,8 +19,11 @@ inline void GetMonotonic(timespec* ts_ptr) {
   clock_gettime(CLOCK_MONOTONIC, ts_ptr);
 }
 
-void PrintDebugTimes() {
-  if (TimespecDiff(gTimes.curr_time, gPrevTimes.curr_time) > 0.0017)
+/**
+ * @param cutoff_ms if time between samples is larger than this, 
+ */
+void PrintDebugTimes(double cutoff_ms) {
+  if (TimespecDiff(gTimes.curr_time, gPrevTimes.curr_time) > cutoff_ms / 1000)
     printf(
         "DEBUGINFO:\n"
         "prev:%9f +%9f +%9f +%9f +%9f = %9f\n"

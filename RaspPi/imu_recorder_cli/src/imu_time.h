@@ -2,7 +2,7 @@
 
 #include <time.h>
 
-typedef struct timespec timespec;
+typedef struct timespec timespec; // Alias.
 
 typedef struct {
   timespec start_time;
@@ -18,8 +18,7 @@ typedef struct {
 extern ImuTimespecs gTimes;
 extern ImuTimespecs gPrevTimes;
 
-double TimespecToDouble(timespec ts);
 double TimespecDiff(timespec ts1, timespec ts2);
 void GetMonotonic(timespec* ts_ptr);
-void PrintDebugTimes();
+void PrintDebugTimes(double cutoff_ms);
 void UpdatePrevTimespecs();
