@@ -1,40 +1,51 @@
-def main(usecache = True):
+def main(nocache=False):
+    # fmt: off
     print("importing...")
-    from get_dataset import GetDataset
-    from play_dataset_audio import PlayDatasetAudio
-    from preprocess_imu_waveform import PreprocessIMUWaveform
     import torch
     import numpy as np
-    from clap_embed_audio import ClapEmbedAudio
     import matplotlib.pyplot as plt
+    import sounddevice as sd
 
+    from importlib import reload
+    import play_dataset_audio; reload(play_dataset_audio);
+    import clap_embed_audio; reload(clap_embed_audio);
+    import preprocess_imu_waveform; reload(preprocess_imu_waveform);
+    import get_dataset; reload(get_dataset);
     print("starting program...")
+    # fmt: on
+
+    # Get dataset.
     global dataset
-    if "dataset" not in globals() and usecache:
-        dataset = GetDataset()
+    if "dataset" not in globals() or nocache:
+        dataset = get_dataset.GetDataset()
+        print("cache miss: dataset")
     else:
         print("cache hit: dataset")
-    # PlayDatasetAudio(dataset)
+
+    # Play audio.
+    play_dataset_audio.PlayDatasetAudio2(dataset)
 
     # Preprocess all of the dataset dataframes.
     print("preprocessing dataset...")
     CLAP_SAMPLE_RATE = 48000
-    global processed_dataset
-    if "processed_dataset" not in globals() and usecache:
-        processed_dataset = [
-            PreprocessIMUWaveform(
+    global a_mag_audios
+    if "a_mag_audios" not in globals() or nocache:
+        a_mag_audios = [
+            preprocess_imu_waveform.PreprocessIMUWaveform(
                 df["a_mag"].to_numpy(), int(df.attrs["sample_rate"]), CLAP_SAMPLE_RATE
             )
             for df in dataset
         ]
+        print("cache miss: a_mag_audios")
     else:
-        print("cache hit: processed_dataset")
+        print("cache hit: a_mag_audios")
 
     # Make embeddings.
     print("making embeddings...")
     global all_embeddings
-    if "all_embeddings" not in globals() and usecache:
-        all_embeddings = [ClapEmbedAudio(pd) for pd in processed_dataset]
+    if "all_embeddings" not in globals() or nocache:
+        all_embeddings = [clap_embed_audio.ClapEmbedAudio(pd) for pd in a_mag_audios]
+        print("cache miss: all_embeddings")
     else:
         print("cache hit: all_embeddings")
     # Compute dot products between all embeddings
@@ -46,6 +57,7 @@ def main(usecache = True):
     )
 
     print("plotting...")
+    plt.close("all")
     str_labels = [df.attrs["surface"] for df in dataset]
     # plt.figure(figsize=(10, 8))
     # plt.imshow(dot_products, cmap="hot", aspect="auto")
@@ -61,14 +73,26 @@ def main(usecache = True):
     # Plot spectrograms of two processed dataset indices
     fig, nd_axes = plt.subplots(2, 2, figsize=(10, 6))
     axes = np.array(nd_axes).flatten()
-    gamma_correction = 1
-    for i, idx in enumerate([0, 16, 5, 23]):
+    gamma_correction = 0.95
+    NFFT = 256
+    a_mag = [df["a_mag"].to_numpy() for df in dataset]
+    for i, idx in enumerate(
+        [
+            np.random.random_integers(0, 9),
+            np.random.random_integers(0, 9),
+            np.random.random_integers(15, 24),
+            np.random.random_integers(15, 24),
+        ]
+    ):
+        gamma_corrected_waveform = np.sign(a_mag[idx]) * np.power(
+            np.abs(a_mag[idx]), gamma_correction
+        )
         axes[i].specgram(
-            np.power(processed_dataset[idx], gamma_correction),
+            gamma_corrected_waveform,
             Fs=CLAP_SAMPLE_RATE,
             cmap="binary",
-            # NFFT=1024,
-            # noverlap=512,
+            NFFT=NFFT,
+            noverlap=NFFT // 4,
         )
         axes[i].set_title(f"Spectrogram - {str_labels[idx]}")
         axes[i].set_ylabel("Frequency (Hz)")

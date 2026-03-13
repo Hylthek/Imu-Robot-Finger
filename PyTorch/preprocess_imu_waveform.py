@@ -26,6 +26,6 @@ def PreprocessIMUWaveform(wav: np.narray, old_sample_rate: int, new_sample_rate:
     ]
 
     # Normalize.
-    wav_upsampled_normalized = wav_upsampled / max(abs(wav_upsampled))
+    wav_upsampled_normalized:np.typing.NDArray = wav_upsampled / max(abs(wav_upsampled))
 
     return wav_upsampled_normalized
