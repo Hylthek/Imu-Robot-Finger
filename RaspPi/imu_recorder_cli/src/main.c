@@ -8,31 +8,35 @@
 #include "csv.h"
 #include "imu.h"
 #include "imu_time.h"
-#include "libgpiod_interrupt.h"
+#include "libgpiod_imu_interrupt.h"
 #include "priority_manager.h"
 #include "spi.h"
 
-#define CHIP_NAME "/dev/gpiochip0"  // GPIO chip device
-#define LINE_NUM 24                 // GPIO line number (adjust as needed)
-#define TOGGLE_DELAY 1              // Delay in seconds between toggles
+#define CHIP_NAME "/dev/gpiochip0" // GPIO chip device
+#define LINE_NUM 24                // GPIO line number (adjust as needed)
+#define TOGGLE_DELAY 1             // Delay in seconds between toggles
 
-int main(void) {
-  SetMaxPriority();                   // Makes program run with less stalling.
-  HandleSigInt();                     // Handle Ctrl+C terminal interrupt.
-  InitSpiDevice();                    // Init spi device.
-  GpioSetup(25);                      // Init IMU interrupt pin.
-  printf("Program Initialized\n\n");  // Status message.
+int main(void)
+{
+  SetMaxPriority();                  // Makes program run with less stalling.
+  HandleSigInt();                    // Handle Ctrl+C terminal interrupt.
+  InitSpiDevice();                   // Init spi device.
+  GpioSetup(25);                     // Init IMU interrupt pin.
+  printf("Program Initialized\n\n"); // Status message.
 
   // Record loop.
-  while (true) {
+  while (true)
+  {
     // Intro message.
     printf("Press enter to start and stop recording\n");
 
     // Wait for record command.
-    while (stdin_has_data_poll() == false);
+    while (stdin_has_data_poll() == false)
+      ;
 
     // Flush stdin.
-    while (stdin_has_data_poll() == true) getchar();
+    while (stdin_has_data_poll() == true)
+      getchar();
 
     // Create/open file.
     gImuCsvFd = OpenCsv();
@@ -46,20 +50,25 @@ int main(void) {
 
     // IMU loop.
     printf("Recording...\n");
-    while (true) {
+    while (true)
+    {
       // Check stdin buffer for recording stop command.
-      if (stdin_has_data_poll()) {
-        while (stdin_has_data_poll() == true) getchar();  // Flush stdin.
+      if (stdin_has_data_poll())
+      {
+        while (stdin_has_data_poll() == true)
+          getchar(); // Flush stdin.
         break;
       }
 
       // Wait for IMU interrupt.
-      if (GpioGetEvent() == false) continue;
-      // Var will be reset after loop finishes.
+      if (GpioGetEvent() == false) {
+        continue;
+      }
 
       // Counter [0, 999].
       static int count = 999;
-      if (++count == 1000) count = 0;
+      if (++count == 1000)
+        count = 0;
 
       // Get current time.
       GetMonotonic(&gTimes.curr_time);

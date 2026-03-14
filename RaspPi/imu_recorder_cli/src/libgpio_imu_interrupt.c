@@ -3,8 +3,9 @@
 
 /* Minimal example of watching for rising edges on a single line. */
 
-#include "libgpiod_interrupt.h"
+#include "libgpiod_imu_interrupt.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <gpiod.h>
 #include <stdio.h>
@@ -12,14 +13,15 @@
 #include <string.h>
 
 /* Request a line as input with edge detection. */
-static struct gpiod_line_request* request_input_line(const char* chip_path,
+static struct gpiod_line_request *request_input_line(const char *chip_path,
                                                      unsigned int offset,
-                                                     const char* consumer) {
-  struct gpiod_request_config* req_cfg = NULL;
-  struct gpiod_line_request* request = NULL;
-  struct gpiod_line_settings* settings;
-  struct gpiod_line_config* line_cfg;
-  struct gpiod_chip* chip;
+                                                     const char *consumer)
+{
+  struct gpiod_request_config *req_cfg = NULL;
+  struct gpiod_line_request *request = NULL;
+  struct gpiod_line_settings *settings;
+  struct gpiod_line_config *line_cfg;
+  struct gpiod_chip *chip;
   int ret;
 
   chip = gpiod_chip_open(chip_path);
@@ -42,7 +44,8 @@ static struct gpiod_line_request* request_input_line(const char* chip_path,
   if (ret)
     goto free_line_config;
 
-  if (consumer) {
+  if (consumer)
+  {
     req_cfg = gpiod_request_config_new();
     if (!req_cfg)
       goto free_line_config;
@@ -66,15 +69,17 @@ close_chip:
   return request;
 }
 
-struct gpiod_line_request* request;
-struct gpiod_edge_event_buffer* event_buffer;
-const int event_buf_size = 1;
-int GpioSetup(const unsigned int line_offset) {
+struct gpiod_line_request *request;
+struct gpiod_edge_event_buffer *event_buffer;
+const int event_buf_size = 32;
+int GpioSetup(const unsigned int line_offset)
+{
   /* Example configuration - customize to suit your situation. */
-  static const char* const chip_path = "/dev/gpiochip0";
+  static const char *const chip_path = "/dev/gpiochip0";
 
   request = request_input_line(chip_path, line_offset, "watch-line-value");
-  if (!request) {
+  if (!request)
+  {
     fprintf(stderr, "failed to request line: %s\n", strerror(errno));
     return EXIT_FAILURE;
   }
@@ -84,7 +89,8 @@ int GpioSetup(const unsigned int line_offset) {
    * the kernel, but that is not necessary in this case, so 1 is fine.
    */
   event_buffer = gpiod_edge_event_buffer_new(event_buf_size);
-  if (!event_buffer) {
+  if (!event_buffer)
+  {
     fprintf(stderr, "failed to create event buffer: %s\n",
             strerror(errno));
     return EXIT_FAILURE;
@@ -93,23 +99,52 @@ int GpioSetup(const unsigned int line_offset) {
   return 0;
 }
 
-bool GpioGetEvent() {
+static const char *edge_event_type_str(struct gpiod_edge_event *event)
+{
+  switch (gpiod_edge_event_get_event_type(event))
+  {
+  case GPIOD_EDGE_EVENT_RISING_EDGE:
+    return "Rising";
+  case GPIOD_EDGE_EVENT_FALLING_EDGE:
+    return "Falling";
+  default:
+    return "Unknown";
+  }
+}
+
+bool GpioGetEvent()
+{
+  // Timeout stuff.
   const int64_t timeout = 0;
-  int ret = gpiod_line_request_wait_edge_events(request, timeout);
-  // int ret = gpiod_line_request_read_edge_events(request, event_buffer, event_buf_size);
-  if (ret == -1) {
-    fprintf(stderr, "error reading edge events: %s\n", strerror(errno));
-    return EXIT_FAILURE;
+  int timeout_ret = gpiod_line_request_wait_edge_events(request, timeout);
+  if (timeout_ret == -1)
+  {
+    printf("error waiting for edge events: %s\n", strerror(errno));
+    assert(false);
   }
-  // If no events i.e. timed out.
-  if (ret == 0)
+  if (timeout_ret == 0)
+  {
     return false;
-  // If event detected.
-  if (ret == 1) {
-    struct gpiod_edge_event* event;
-    // Pop event.
-    const unsigned long idx = 0;
-    event = gpiod_edge_event_buffer_get_event(event_buffer, idx);
-    return true;
   }
+
+  // Get and process number of events.
+  int num_events = gpiod_line_request_read_edge_events(request, event_buffer, event_buf_size);
+  if (num_events == -1)
+  {
+    printf("error reading edge events: %s\n", strerror(errno));
+    assert(false);
+  }
+  if (num_events > 1)
+  {
+    printf("warning, more than 1 event read, program might be too slow, num_events = %d\n", num_events);
+  }
+  if (num_events == 0)
+  {
+    printf("error, no events in buffer, but timeout_ret should've triggered previous return\n");
+    assert(false);
+  }
+
+  // Pop detected event and return true.
+  gpiod_edge_event_buffer_get_event(event_buffer, 0);
+  return true;
 }
