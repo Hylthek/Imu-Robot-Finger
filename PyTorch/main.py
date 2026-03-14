@@ -84,11 +84,8 @@ def main(nocache=False):
             np.random.random_integers(15, 24),
         ]
     ):
-        gamma_corrected_waveform = np.sign(a_mag[idx]) * np.power(
-            np.abs(a_mag[idx]), gamma_correction
-        )
         axes[i].specgram(
-            gamma_corrected_waveform,
+            a_mag,
             Fs=CLAP_SAMPLE_RATE,
             cmap="binary",
             NFFT=NFFT,

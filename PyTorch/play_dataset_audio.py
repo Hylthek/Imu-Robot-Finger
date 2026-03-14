@@ -55,7 +55,7 @@ def PlayDatasetAudio2(dataset):
             len(a_mag_std) / imu_sample_rate,
             len(a_mag_std),
         )
-        plt.close('all')
+        plt.close("all")
         plt.figure()
         plt.plot(time, a_mag_std, label="Waveform")
         plt.title(f"Surface: {df.attrs['surface']}")
