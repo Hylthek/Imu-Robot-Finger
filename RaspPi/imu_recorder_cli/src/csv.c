@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "csv.h"
 
 #include <signal.h>
@@ -7,12 +9,14 @@
 #include <time.h>
 #include <unistd.h>
 
-FILE* gImuCsvFd = NULL;
+FILE *gImuCsvFd = NULL;
 
 // Perform a safe exit that flushes the csv file.
-void SafeExit() {
-  if (gImuCsvFd != NULL) {
-    fclose(gImuCsvFd);  // Close the file
+void SafeExit()
+{
+  if (gImuCsvFd != NULL)
+  {
+    fclose(gImuCsvFd); // Close the file
     printf("\nFile closed.\n");
   }
   printf("Exiting Program.\n");
@@ -21,12 +25,14 @@ void SafeExit() {
 }
 
 // Routine for POSIX signals.
-void SigIntRoutine(int signal) {
+void SigIntRoutine(int signal)
+{
   (void)signal;
   SafeExit();
 }
 
-void HandleSigInt() {
+void HandleSigInt()
+{
   struct sigaction sig_action;
   sig_action.sa_handler = SigIntRoutine;
   sig_action.sa_flags = 0;
@@ -34,7 +40,8 @@ void HandleSigInt() {
     perror("Failed to set SIGINT handler");
 }
 
-FILE* OpenCsv() {
+FILE *OpenCsv()
+{
   // Get formatted date and time.
   time_t now = time(NULL);
   char date_str[20];
@@ -43,7 +50,8 @@ FILE* OpenCsv() {
   // Check for proper recording directory.
   // This is a possible termination point.
   const char recording_dir_name[50] = "imu_recordings_dir";
-  if (access(recording_dir_name, F_OK) == -1) {
+  if (access(recording_dir_name, F_OK) == -1)
+  {
     printf("ERROR: There is no dir called \"%s/\"\n", recording_dir_name);
     exit(1);
   }

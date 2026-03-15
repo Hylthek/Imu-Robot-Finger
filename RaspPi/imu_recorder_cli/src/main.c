@@ -12,16 +12,14 @@
 #include "priority_manager.h"
 #include "spi.h"
 
-#define CHIP_NAME "/dev/gpiochip0" // GPIO chip device
-#define LINE_NUM 24                // GPIO line number (adjust as needed)
-#define TOGGLE_DELAY 1             // Delay in seconds between toggles
+const int kImuIntPin = 25; // Adjust as needed.
 
 int main(void)
 {
   SetMaxPriority();                  // Makes program run with less stalling.
   HandleSigInt();                    // Handle Ctrl+C terminal interrupt.
   InitSpiDevice();                   // Init spi device.
-  GpioSetup(25);                     // Init IMU interrupt pin.
+  GpioSetup(kImuIntPin);             // Init IMU interrupt pin.
   printf("Program Initialized\n\n"); // Status message.
 
   // Record loop.
@@ -61,7 +59,8 @@ int main(void)
       }
 
       // Wait for IMU interrupt.
-      if (GpioGetEvent() == false) {
+      if (GpioGetEvent() == false)
+      {
         continue;
       }
 
