@@ -22,6 +22,20 @@ Nathan's Matlab model probably classifies based on orientation of the imu and no
 
 ## TODO
 
-- Fix bug on raspi
+- Fix bug on RasPi
 - Collect new data!
 - Create new signal visualization scripts in python (pos, autocorrelation)
+
+## 3/16/26
+
+Even with the three channels turned into one magnitude channel, the MATLAB classifier is able to use acceleration mean to classify surfaces (with little added help from other statistical features).
+
+Looking at the plots in python, it seems that the wall recordings seem to have larger impulses more frequently, contributing to a larger mean.
+
+It seems that the wall did contribute to more overall vibration after all.
+
+Normalizing variance per-waveform decreases model accuracy as expected.
+
+Looking at the plots with variance normalized, the only difference between the plots looks like frequency of spikes, if we somehow normalized this, performance would surely drop again.
+
+I stand by the fact that more sophisticated features like timbre of surface are hard to extract with the large, rigid finger pad.
