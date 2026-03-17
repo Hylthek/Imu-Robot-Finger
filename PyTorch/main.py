@@ -1,3 +1,87 @@
+import time
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import matplotlib.pyplot as plt
+import sounddevice as sd
+
+def GetAutocorrelation(series:pd.Series):
+    n = len(series)
+    series = series - series.mean()
+    autocorr = [series.autocorr(lag=tau) for tau in range(n)]
+    return np.array(autocorr)
+
+def test():
+    cwd = Path(__file__).parent
+    data1 = pd.read_csv(cwd / "tmp/cardboard")
+    data2 = pd.read_csv(cwd / "tmp/felt")
+    data1.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
+    data2.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
+
+    # Remove mean from each column except 't'
+    for col in ["ax", "ay", "az", "gx", "gy", "gz"]:
+        data1[col] = data1[col] - data1[col].mean()
+        data2[col] = data2[col] - data2[col].mean()
+
+    # Sample rate.
+    data1.attrs["sample_rate"] = 1 / data1["t"].diff().median()
+    data2.attrs["sample_rate"] = 1 / data2["t"].diff().median()
+
+    # Segment.
+    data1 = data1.iloc[5600:5800].reset_index(drop=True)
+    data2 = data2.iloc[3550:3800].reset_index(drop=True)
+
+    plt.plot(data2["ax"])
+
+    # Plots.
+    # Play sound.
+    plt.ioff()
+    plt.close("all")
+    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    plt.tight_layout()
+    for axis, col, data in zip(
+        axes.flat,
+        ["ax", "ay", "az", "ax", "ay", "az"],
+        [data1, data1, data1, data2, data2, data2],
+    ):
+        data = GetAutocorrelation(data[col])
+        axis.clear()
+        axis.plot(data)
+        axis.set_title(col)
+        plt.show(block=False)
+        plt.pause(0.1)
+        sd.play(data, 2000, loop=True)
+        time.sleep(0.5)
+        sd.stop()
+
+def dumbtest():
+    cwd = Path(__file__).parent
+    data_table = pd.read_csv("C:/Users/hylth/Documents/Pico/ImuRobotFinger/PyTorch/csv/GuanYinSurfaces/GuanYinTable/recording_2026-02-06_16-41-35.csv")
+    data_wall = pd.read_csv("C:/Users/hylth/Documents/Pico/ImuRobotFinger/PyTorch/csv/GuanYinSurfaces/GuanYinWall/recording_2026-02-06_16-42-47.csv")
+    data_table.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
+    data_wall.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
+
+    # Sample rate.
+    data_table.attrs["sample_rate"] = 1 / data_table["t"].diff().median()
+    data_wall.attrs["sample_rate"] = 1 / data_wall["t"].diff().median()
+
+    # Calculate magnitude of acceleration and gyroscope
+    data_table["a_mag"] = np.sqrt(data_table["ax"]**2 + data_table["ay"]**2 + data_table["az"]**2)
+    data_table["g_mag"] = np.sqrt(data_table["gx"]**2 + data_table["gy"]**2 + data_table["gz"]**2)
+    data_wall["a_mag"] = np.sqrt(data_wall["ax"]**2 + data_wall["ay"]**2 + data_wall["az"]**2)
+    data_wall["g_mag"] = np.sqrt(data_wall["gx"]**2 + data_wall["gy"]**2 + data_wall["gz"]**2)
+
+    # Normalize variance of a_mag and g_mag
+    for col in ["a_mag", "g_mag"]:
+        data_table[col] = data_table[col] / data_table[col].std()
+        data_wall[col] = data_wall[col] / data_wall[col].std()
+
+    plt.plot(data_table["a_mag"])
+    plt.figure()
+    plt.plot(data_wall["a_mag"])
+    plt.show()
+
+
 def main(nocache=False):
     # fmt: off
     print("importing...")
