@@ -4,17 +4,82 @@ import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 import sounddevice as sd
+import scipy
+import glob
 
-def GetAutocorrelation(series:pd.Series):
+
+def GetAutocorrelation(series: pd.Series):
     n = len(series)
     series = series - series.mean()
     autocorr = [series.autocorr(lag=tau) for tau in range(n)]
     return np.array(autocorr)
 
+
+def PlotSpectrogram(
+    series: pd.Series,
+    sample_rate: int,
+    title: str = "Spectrogram",
+    gamma: float = 1.0,
+    NFFT: int = 64,
+):
+    # Parameters for the spectrogram
+    nperseg = NFFT  # Window size
+    noverlap = NFFT - 1  # Overlap between windows
+    step = nperseg - noverlap  # Step size for sliding window
+    nfft = nperseg  # Number of FFT points
+
+    # Prepare the time and frequency axes
+    num_windows = (len(series) - noverlap) // step
+    t = np.arange(num_windows) * step / sample_rate
+    f = np.fft.rfftfreq(nfft, d=1 / sample_rate)
+
+    # Compute the spectrogram manually
+    spectrogram = []
+    for i in range(0, len(series) - nperseg + 1, step):
+        window = series[i : i + nperseg]  # Extract the window
+        window = window * np.hanning(nperseg)  # Apply a Hanning window
+        spectrum = np.fft.rfft(window)  # Compute the FFT
+        spectrogram.append(np.abs(spectrum))  # Store the magnitude
+
+    spectrogram = np.array(spectrogram).T  # Transpose for plotting
+
+    spectrogram = spectrogram / np.max(spectrogram)
+
+    # Apply gamma correction if needed
+    if gamma != 1.0:
+        spectrogram = spectrogram**gamma
+
+    # Plot the spectrogram
+    plt.figure(figsize=(10, 4))
+    plt.pcolormesh(t, f, spectrogram, cmap="binary")
+    plt.title(title)
+    plt.ylabel("Frequency (Hz)")
+    plt.xlabel("Time (s)")
+    plt.colorbar(label="Amplitude")
+    plt.tight_layout()
+    plt.show()
+
+
+def foo():
+    plt.close("all")
+
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv\AirVersusTable/*"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    for df, plt_idx in zip(dataframes, range(1, 100)):
+        plt.subplot(3, 1, plt_idx)
+        plt.plot(df.iloc[:, 1])
+
+    plt.show()
+
+
 def test():
     cwd = Path(__file__).parent
-    data1 = pd.read_csv(cwd / "tmp/cardboard")
-    data2 = pd.read_csv(cwd / "tmp/felt")
+    data1 = pd.read_csv("")
+    data2 = pd.read_csv("")
     data1.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
     data2.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
 
@@ -31,33 +96,63 @@ def test():
     data1 = data1.iloc[5600:5800].reset_index(drop=True)
     data2 = data2.iloc[3550:3800].reset_index(drop=True)
 
-    plt.plot(data2["ax"])
+    # Add mag
+    data1["a_mag"] = np.sqrt(data1["ax"] ** 2 + data1["ay"] ** 2 + data1["az"] ** 2)
+    data1["g_mag"] = np.sqrt(data1["gx"] ** 2 + data1["gy"] ** 2 + data1["gz"] ** 2)
+    data2["a_mag"] = np.sqrt(data2["ax"] ** 2 + data2["ay"] ** 2 + data2["az"] ** 2)
+    data2["g_mag"] = np.sqrt(data2["gx"] ** 2 + data2["gy"] ** 2 + data2["gz"] ** 2)
 
     # Plots.
     # Play sound.
-    plt.ioff()
+    # plt.close("all")
+    # fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    # plt.tight_layout()
+    # for axis, col, data in zip(
+    #     axes.flat,
+    #     ["ax", "ay", "az", "ax", "ay", "az"],
+    #     [data1, data1, data1, data2, data2, data2],
+    # ):
+    #     data = GetAutocorrelation(data[col])
+    #     axis.clear()
+    #     axis.plot(data)
+    #     axis.set_title(col)
+    #     plt.show(block=False)
+    #     plt.pause(0.1)
+    #     sd.play(data, 2000, loop=True)
+    #     time.sleep(0.5)
+    #     sd.stop()
+
     plt.close("all")
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-    plt.tight_layout()
-    for axis, col, data in zip(
-        axes.flat,
-        ["ax", "ay", "az", "ax", "ay", "az"],
-        [data1, data1, data1, data2, data2, data2],
-    ):
-        data = GetAutocorrelation(data[col])
-        axis.clear()
-        axis.plot(data)
-        axis.set_title(col)
-        plt.show(block=False)
-        plt.pause(0.1)
-        sd.play(data, 2000, loop=True)
-        time.sleep(0.5)
-        sd.stop()
+
+    # plt.plot(data1["a_mag"])
+    # plt.plot(data2["a_mag"])
+
+    # PlotSpectrogram(data1["a_mag"], data1.attrs["sample_rate"], "data1", gamma=0.1, NFFT=64)
+    # PlotSpectrogram(data2["a_mag"], data2.attrs["sample_rate"], "data2", gamma=0.1, NFFT=64)
+
+    data1 = data1["a_mag"] - np.mean(data1["a_mag"])
+    data1 = np.cumsum(data1)
+    data1 -= np.mean(data1)
+    data1 = np.cumsum(data1)
+    plt.plot(data1)
+
+    data2 = data2["a_mag"] - np.mean(data2["a_mag"])
+    data2 = np.cumsum(data2)
+    data2 -= np.mean(data2)
+    data2 = np.cumsum(data2)
+    plt.plot(data2)
+
+    plt.show()
+
 
 def dumbtest():
     cwd = Path(__file__).parent
-    data_table = pd.read_csv("C:/Users/hylth/Documents/Pico/ImuRobotFinger/PyTorch/csv/GuanYinSurfaces/GuanYinTable/recording_2026-02-06_16-41-35.csv")
-    data_wall = pd.read_csv("C:/Users/hylth/Documents/Pico/ImuRobotFinger/PyTorch/csv/GuanYinSurfaces/GuanYinWall/recording_2026-02-06_16-42-47.csv")
+    data_table = pd.read_csv(
+        "C:/Users/hylth/Documents/Pico/ImuRobotFinger/PyTorch/csv/GuanYinSurfaces/GuanYinTable/recording_2026-02-06_16-41-35.csv"
+    )
+    data_wall = pd.read_csv(
+        "C:/Users/hylth/Documents/Pico/ImuRobotFinger/PyTorch/csv/GuanYinSurfaces/GuanYinWall/recording_2026-02-06_16-42-47.csv"
+    )
     data_table.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
     data_wall.columns = ["t", "ax", "ay", "az", "gx", "gy", "gz"]
 
@@ -66,10 +161,18 @@ def dumbtest():
     data_wall.attrs["sample_rate"] = 1 / data_wall["t"].diff().median()
 
     # Calculate magnitude of acceleration and gyroscope
-    data_table["a_mag"] = np.sqrt(data_table["ax"]**2 + data_table["ay"]**2 + data_table["az"]**2)
-    data_table["g_mag"] = np.sqrt(data_table["gx"]**2 + data_table["gy"]**2 + data_table["gz"]**2)
-    data_wall["a_mag"] = np.sqrt(data_wall["ax"]**2 + data_wall["ay"]**2 + data_wall["az"]**2)
-    data_wall["g_mag"] = np.sqrt(data_wall["gx"]**2 + data_wall["gy"]**2 + data_wall["gz"]**2)
+    data_table["a_mag"] = np.sqrt(
+        data_table["ax"] ** 2 + data_table["ay"] ** 2 + data_table["az"] ** 2
+    )
+    data_table["g_mag"] = np.sqrt(
+        data_table["gx"] ** 2 + data_table["gy"] ** 2 + data_table["gz"] ** 2
+    )
+    data_wall["a_mag"] = np.sqrt(
+        data_wall["ax"] ** 2 + data_wall["ay"] ** 2 + data_wall["az"] ** 2
+    )
+    data_wall["g_mag"] = np.sqrt(
+        data_wall["gx"] ** 2 + data_wall["gy"] ** 2 + data_wall["gz"] ** 2
+    )
 
     # Normalize variance of a_mag and g_mag
     for col in ["a_mag", "g_mag"]:
