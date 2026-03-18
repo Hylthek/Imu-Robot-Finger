@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "cli.h"
 #include "csv.h"
@@ -53,8 +54,11 @@ int main(void)
       // Check stdin buffer for recording stop command.
       if (stdin_has_data_poll())
       {
+        // Flush csv file.
+        fflush(gImuCsvFd)
+        // Flush stdin.
         while (stdin_has_data_poll() == true)
-          getchar(); // Flush stdin.
+          getchar();
         break;
       }
 
@@ -83,7 +87,7 @@ int main(void)
       GetMonotonic(&gTimes.parse_time);
 
       // Log received data.
-      fprintf(gImuCsvFd, "%f, %d, %d, %d, %d, %d, %d\n", imu_data.t, imu_data.ax,
+      assert fprintf(gImuCsvFd, "%f, %d, %d, %d, %d, %d, %d\n", imu_data.t, imu_data.ax,
               imu_data.ay, imu_data.az, imu_data.gx, imu_data.gy, imu_data.gz);
 
       // Post-log time.
