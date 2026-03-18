@@ -4,7 +4,7 @@
 
 Bug found, recording takes samples at 8 times the imu configured speed, repeated samples.
 
-CLAP embeddings can't differentiate classes fft visual analysis can't really either. I suspect that the finger tip that we 3d printed is acting as a mechanical lowpass filter. Might want to change to a needle fingertip.
+CLAP embeddings can't differentiate classes fft visual analysis can't really either. I suspect that the finger tip that we 3d printed is acting as a mechanical low-pass filter. Might want to change to a needle fingertip.
 
 People speculate that fingerprints are useful because they allow for better tactile sensation. Perhaps many soft needles would be an ideal robotic finger pad, future work.
 
@@ -56,7 +56,7 @@ Comparing all classes, it looks like it will be hard to do any meaningful analys
 
 - Bug found: imu_recorder doesn't always finish writing to local file before terminating program. "29.751297, -" line found at end of file.
 - Thought: I'm thinking of adding a class for "nothing" which will have a larger cost for getting wrong. This will essentially automatically segment our data. This will require a special cost matrix because the normal classes will contain "nothing" as well.
-  - I've figured what the cost matrix should be. For the "nothing" class, false negatives should cost more than normal and false positives should cost more than normal. This will have the effect of making sure most of dragging data is considered a surface class, with actual nothing sometimes accidentally seen as a surface class.
+  - I've figured what the cost matrix should be. For the "nothing" class, false negatives should cost more than normal and false positives should cost less than normal. This will have the effect of making sure most of dragging data is considered a surface class, with actual nothing sometimes accidentally seen as a surface class.
   - I've also confirmed that this approach can actually work, should implement in PyTorch.
 
 ## TODO
