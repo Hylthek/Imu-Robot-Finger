@@ -97,10 +97,10 @@ void ImuInitRegisters(int file_desc)
   spi_out[1] = 0b10010001; // RTC clock input is NOT required.
   spi_transfer(file_desc, spi_out, in_buf, 2);
   spi_out[0] = kAccelConfig0;
-  spi_out[1] = 0b01100100; // Refer to reference comments above.
+  spi_out[1] = 0b00100100; // Refer to reference comments above.
   spi_transfer(file_desc, spi_out, in_buf, 2);
   spi_out[0] = kGyroConfig0;
-  spi_out[1] = 0b11100100; // Refer to reference comments above.
+  spi_out[1] = 0b00100100; // Refer to reference comments above.
   spi_transfer(file_desc, spi_out, in_buf, 2);
 
   // Bank 1.
