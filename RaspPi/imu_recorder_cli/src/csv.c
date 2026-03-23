@@ -31,7 +31,7 @@ void SigIntRoutine(int signal)
   SafeExit();
 }
 
-void HandleSigInt()
+void SigIntHandlerSetup()
 {
   struct sigaction sig_action;
   sig_action.sa_handler = SigIntRoutine;
@@ -40,7 +40,7 @@ void HandleSigInt()
     perror("Failed to set SIGINT handler");
 }
 
-FILE *OpenCsv()
+FILE *OpenNewCsv()
 {
   // Get formatted date and time.
   time_t now = time(NULL);

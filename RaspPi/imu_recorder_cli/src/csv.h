@@ -7,5 +7,5 @@ extern FILE* gImuCsvFd;
 
 void SigIntRoutine(int signal);
 void SafeExit();
-void HandleSigInt();
-FILE* OpenCsv();
+void SigIntHandlerSetup();
+FILE* OpenNewCsv();

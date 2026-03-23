@@ -18,7 +18,7 @@ const int kImuIntPin = 25; // Adjust as needed.
 int main(void)
 {
   SetMaxPriority();                  // Makes program run with less stalling.
-  HandleSigInt();                    // Handle Ctrl+C terminal interrupt.
+  SigIntHandlerSetup();                    // Handle Ctrl+C terminal interrupt.
   InitSpiDevice();                   // Init spi device.
   GpioSetup(kImuIntPin);             // Init IMU interrupt pin.
   printf("Program Initialized\n\n"); // Status message.
@@ -38,7 +38,7 @@ int main(void)
       getchar();
 
     // Create/open file.
-    gImuCsvFd = OpenCsv();
+    gImuCsvFd = OpenNewCsv();
 
     // Print csv headers.
     fprintf(gImuCsvFd, "Time, ax, ay, az, gx, gy, gz\n");
@@ -54,8 +54,8 @@ int main(void)
       // Check stdin buffer for recording stop command.
       if (stdin_has_data_poll())
       {
-        // Flush csv file.
-        fflush(gImuCsvFd)
+        // Close csv file.
+        fclose(gImuCsvFd);
         // Flush stdin.
         while (stdin_has_data_poll() == true)
           getchar();
@@ -87,8 +87,11 @@ int main(void)
       GetMonotonic(&gTimes.parse_time);
 
       // Log received data.
-      assert fprintf(gImuCsvFd, "%f, %d, %d, %d, %d, %d, %d\n", imu_data.t, imu_data.ax,
-              imu_data.ay, imu_data.az, imu_data.gx, imu_data.gy, imu_data.gz);
+      int chars_printed = fprintf(gImuCsvFd, "%f, %d, %d, %d, %d, %d, %d\n",
+                                  imu_data.t,
+                                  imu_data.ax, imu_data.ay, imu_data.az,
+                                  imu_data.gx, imu_data.gy, imu_data.gz);
+      assert(chars_printed > 1);
 
       // Post-log time.
       GetMonotonic(&gTimes.log_time);
