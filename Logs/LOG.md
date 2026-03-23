@@ -63,7 +63,12 @@ Comparing all classes, it looks like it will be hard to do any meaningful analys
 
 - ~~Fix bug with last line of imu recording.~~
 - Analyze more data with double-integration / auto-correlation techniques.
-  - Print new board chassis + tip.
-  - Solder longer wires to board.
+  - ~~Print new board chassis + tip.~~
+  - ~~Solder longer wires to board.~~
   - Collect lengthy continuous data for analysis.
-- Create a surface/no-surface classifier in PyTorch.
+- Create a surface/no-surface classifier in PyTorch. (WONT DO)
+
+# 3/23/26
+
+- Finished adding longer wires to the new chassis.
+- Tested the bug fix and found compiler bugs, more horribly, the wires seem to be cold-soldered or something, need to use logic analyzer to diagnose.
