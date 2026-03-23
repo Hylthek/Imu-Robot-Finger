@@ -22,9 +22,9 @@ Nathan's Matlab model probably classifies based on orientation of the imu and no
 
 ## TODO
 
-- Fix bug on RasPi
-- Collect new data!
-- Create new signal visualization scripts in python (pos, autocorrelation)
+- ~~Fix bug on RasPi~~
+- ~~Collect new data!~~
+- ~~Create new signal visualization scripts in python (pos, autocorrelation)~~
 
 ## 3/16/26
 
@@ -41,8 +41,8 @@ Comparing all classes, it looks like it will be hard to do any meaningful analys
 
 ## TODO
 
-- Create needle tip for sensor.
-- Create handle for sensor.
+- ~~Create needle tip for sensor.~~
+- ~~Create handle for sensor.~~
 - Increase cable length of the sensor with soldering.
 - Collect long continuous data with new setup.
 - More analysis
@@ -61,7 +61,9 @@ Comparing all classes, it looks like it will be hard to do any meaningful analys
 
 ## TODO
 
-- Fix bug with last line of imu recording.
-- Print new board chassis + tip.
-- Solder longer wires to board.
-- Collect lengthy continuous data for analysis.
+- ~~Fix bug with last line of imu recording.~~
+- Analyze more data with double-integration / auto-correlation techniques.
+  - Print new board chassis + tip.
+  - Solder longer wires to board.
+  - Collect lengthy continuous data for analysis.
+- Create a surface/no-surface classifier in PyTorch.
