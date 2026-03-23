@@ -17,6 +17,7 @@ void SafeExit()
   if (gImuCsvFd != NULL)
   {
     fclose(gImuCsvFd); // Close the file
+    gImuCsvFd = NULL; // Make sure the file cant be closed again.
     printf("\nFile closed.\n");
   }
   printf("Exiting Program.\n");

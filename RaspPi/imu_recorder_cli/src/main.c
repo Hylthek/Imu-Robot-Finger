@@ -56,6 +56,7 @@ int main(void)
       {
         // Close csv file.
         fclose(gImuCsvFd);
+        gImuCsvFd = NULL;
         // Flush stdin.
         while (stdin_has_data_poll() == true)
           getchar();
