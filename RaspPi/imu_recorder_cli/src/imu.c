@@ -1,7 +1,5 @@
 #include "imu.h"
-
 #include <stdint.h>
-
 #include "spi.h"
 
 /*
@@ -72,6 +70,8 @@ Accelerometer ODR selection for UI interface output
 1111: 500Hz (LP or LN mode)
 */
 
+// https://download.mikroe.com/documents/datasheets/ICM-42688-P_Datasheet.pdf
+
 // One-time writes to IMU config-type registers. NOT OPTIONAL.
 void ImuInitRegisters(int file_desc)
 {
@@ -80,8 +80,8 @@ void ImuInitRegisters(int file_desc)
 
   // Bank 0.
   spi_out[0] = kIntConfig1;
-  spi_out[1] = 0b01000000; // Initialize interrupts. Also set interrupt pulse
-                           // to 100us->8us
+  spi_out[1] = 0b01100000; // Initialize interrupts.
+                           // Set interrupt pulse to 8us and disable de-assert duration.
   spi_transfer(file_desc, spi_out, in_buf, 2);
   spi_out[0] = kIntSource0;
   spi_out[1] = 0b00001000; // Change interrupt output from "Reset done" to "UI
