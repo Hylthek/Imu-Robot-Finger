@@ -136,11 +136,13 @@ bool GpioGetEvent()
   }
   if (num_events > 1)
   {
-    printf("warning, more than 1 event read, program might be too slow, num_events = %d\n", num_events);
+    printf("warning, more than 1 event read, program might be too slow, "
+           "num_events = %d\n",
+           num_events);
   }
   if (num_events == 0)
   {
-    printf("error, no events in buffer, but timeout_ret should've triggered previous return\n");
+    printf("error, no events in buffer, but timeout_ret should've triggered previous error\n");
     assert(false);
   }
 
