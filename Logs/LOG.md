@@ -72,3 +72,8 @@ Comparing all classes, it looks like it will be hard to do any meaningful analys
 
 - Finished adding longer wires to the new chassis.
 - Tested the bug fix and found compiler bugs, more horribly, the wires seem to be cold-soldered or something, need to use logic analyzer to diagnose.
+
+# 4/20/26
+
+- Bug still exists, interrupt is firing randomly. Bought a portable logic analyzer and will solve this later.
+- Started C program to record and print IMU data to stdout which will be piped to a python GUI program running on PC. This will be for the SDP symposium.
