@@ -86,9 +86,9 @@ void ImuInitRegisters(int file_desc)
   // Wait at least 1ms for reset to be effective.
   usleep(2000);
 
-  // Initialize interrupts.
+  // Initialize interrupts. Set pulse duration -> 8us and de-assertion duration to 0us.
   spi_out[0] = kIntConfig1;
-  spi_out[1] = 0b00000000;
+  spi_out[1] = 0b01100000;
   spi_transfer(file_desc, spi_out, in_buf, 2);
 
   // Change interrupt output from "Reset done" to "UI data ready".
