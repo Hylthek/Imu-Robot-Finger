@@ -33,7 +33,7 @@ static struct gpiod_line_request *request_input_line(const char *chip_path,
     goto close_chip;
 
   gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_INPUT);
-  gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_RISING);
+  gpiod_line_settings_set_edge_detection(settings, GPIOD_LINE_EDGE_FALLING);
 
   line_cfg = gpiod_line_config_new();
   if (!line_cfg)
@@ -97,19 +97,6 @@ int GpioSetup(const unsigned int line_offset)
   }
 
   return 0;
-}
-
-static const char *edge_event_type_str(struct gpiod_edge_event *event)
-{
-  switch (gpiod_edge_event_get_event_type(event))
-  {
-  case GPIOD_EDGE_EVENT_RISING_EDGE:
-    return "Rising";
-  case GPIOD_EDGE_EVENT_FALLING_EDGE:
-    return "Falling";
-  default:
-    return "Unknown";
-  }
 }
 
 bool GpioGetEvent()
