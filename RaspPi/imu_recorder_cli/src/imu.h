@@ -26,6 +26,7 @@ enum ImuRegs {
   kIntfConfig5 = 0x7b,  // Note, this is in bank 1 , not bank 0.
   kAccelConfig0 = 0x50,
   kGyroConfig0 = 0x4f,
+  kDeviceConfig = 0x11,
 };
 
 typedef struct {

@@ -1,6 +1,8 @@
 #include "imu.h"
 #include <stdint.h>
 #include "spi.h"
+#include <stdio.h>
+#include <unistd.h>
 
 /*
 7:5 GYRO_FS_SEL
@@ -75,33 +77,47 @@ Accelerometer ODR selection for UI interface output
 // One-time writes to IMU config-type registers. NOT OPTIONAL.
 void ImuInitRegisters(int file_desc)
 {
-  // Do some one-time SPI writes.
   uint8_t spi_out[6], in_buf[6];
 
-  // Bank 0.
+  // Perform software reset.
+  spi_out[0] = kDeviceConfig;
+  spi_out[1] = 0b00000001;
+  spi_transfer(file_desc, spi_out, in_buf, 2);
+  // Wait at least 1ms for reset to be effective.
+  usleep(2000);
+
+  // Initialize interrupts. Set interrupt pulse to 8us and disable de-assert duration.
   spi_out[0] = kIntConfig1;
-  spi_out[1] = 0b01100000; // Initialize interrupts.
-                           // Set interrupt pulse to 8us and disable de-assert duration.
+  spi_out[1] = 0b01100000;
   spi_transfer(file_desc, spi_out, in_buf, 2);
+
+  // Change interrupt output from "Reset done" to "UI data ready".
   spi_out[0] = kIntSource0;
-  spi_out[1] = 0b00001000; // Change interrupt output from "Reset done" to "UI
-                           // data ready".
+  spi_out[1] = 0b00001000;
   spi_transfer(file_desc, spi_out, in_buf, 2);
+
+  // Set dataReady interrupt to push-pull.
   spi_out[0] = kIntConfig;
-  spi_out[1] = 0b00000010; // Set dataReady interrupt to push-pull.
+  spi_out[1] = 0b00000010;
   spi_transfer(file_desc, spi_out, in_buf, 2);
+
+  // Place gyro and accel in low noise mode.
   spi_out[0] = kPwrMgmt0;
-  spi_out[1] = 0b00001111; // Place gyro and accel in low noise mode.
+  spi_out[1] = 0b00001111;
   spi_transfer(file_desc, spi_out, in_buf, 2);
+
+  // RTC clock input is NOT required.
   spi_out[0] = kIntfConfig1;
-  spi_out[1] = 0b10010001; // RTC clock input is NOT required.
+  spi_out[1] = 0b10010001;
   spi_transfer(file_desc, spi_out, in_buf, 2);
+
+  // Refer to reference comments above.
+  const int kGyroAccelConfigCode = 0b00000110; // default FS, 1000hz
   spi_out[0] = kAccelConfig0;
-  spi_out[1] = 0b00000110; // Refer to reference comments above.
-  spi_transfer(file_desc, spi_out, in_buf, 2);
-  spi_out[0] = kGyroConfig0;
-  spi_out[1] = 0b00000110; // Refer to reference comments above.
-  spi_transfer(file_desc, spi_out, in_buf, 2);
+  spi_out[1] = kGyroAccelConfigCode;
+  spi_out[2] = kGyroConfig0;
+  spi_out[3] = kGyroAccelConfigCode;
+  spi_transfer(file_desc, spi_out, in_buf, 4);
 
   // Bank 1.
   spi_out[0] = kRegBankSel;
@@ -111,4 +127,12 @@ void ImuInitRegisters(int file_desc)
   spi_out[4] = kRegBankSel;
   spi_out[5] = 0b00000000; // Change from bank 1 to bank 0.
   spi_transfer(file_desc, spi_out, in_buf, 6);
+
+  // Reading test.
+  const int kWhoAmI = 0x75;
+  spi_out[0] = 0x80 | kWhoAmI;
+  spi_out[1] = 0x00;
+  spi_transfer(file_desc, spi_out, in_buf, 2);
+  if (in_buf[1] != 0x47)
+    printf("Warning: WHO_AM_I register of IMU device did not return expected value of 0x47. Value: 0x%x\n", in_buf[1]);
 }
