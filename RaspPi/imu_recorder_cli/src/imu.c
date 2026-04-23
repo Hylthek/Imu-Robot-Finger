@@ -112,7 +112,7 @@ void ImuInitRegisters(int file_desc)
   spi_transfer(file_desc, spi_out, in_buf, 2);
 
   // Refer to reference comments above.
-  const int kGyroAccelConfigCode = 0b00000110; // default FS, 1000hz
+  const int kGyroAccelConfigCode = 0b00000100; // default FS, 4000hz
   spi_out[0] = kAccelConfig0;
   spi_out[1] = kGyroAccelConfigCode;
   spi_out[2] = kGyroConfig0;
