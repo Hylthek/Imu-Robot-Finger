@@ -18,7 +18,7 @@ const int kImuIntPin = 25; // Adjust as needed.
 int main(void)
 {
   SetMaxPriority();                  // Makes program run with less stalling.
-  SigIntHandlerSetup();                    // Handle Ctrl+C terminal interrupt.
+  SigIntHandlerSetup();              // Handle Ctrl+C terminal interrupt.
   InitSpiDevice();                   // Init spi device.
   GpioSetup(kImuIntPin);             // Init IMU interrupt pin.
   printf("Program Initialized\n\n"); // Status message.
@@ -86,6 +86,17 @@ int main(void)
       GetMonotonic(&gTimes.spi_time);
       // Debug post-parse time.
       GetMonotonic(&gTimes.parse_time);
+
+      // Print sample data.
+      static double last_print_time = 0;
+      if (imu_data.t > last_print_time + 0.5)
+      {
+        last_print_time = imu_data.t;
+        printf("%f, %d, %d, %d, %d, %d, %d\n",
+               imu_data.t,
+               imu_data.ax, imu_data.ay, imu_data.az,
+               imu_data.gx, imu_data.gy, imu_data.gz);
+      }
 
       // Log received data.
       int chars_printed = fprintf(gImuCsvFd, "%f, %d, %d, %d, %d, %d, %d\n",
