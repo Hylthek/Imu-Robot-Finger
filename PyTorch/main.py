@@ -8,11 +8,108 @@ import scipy
 import glob
 
 
+def dist(x, y, z):
+    return np.sqrt(x**2 + y**2 + z**2)
+
+
+def plot_csv_autocorrelation():
+    plt.close("all")
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv/*.csv"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    data_amag_numpy = [
+        dist(
+            dataframe.iloc[:, 1].to_numpy(),
+            dataframe.iloc[:, 2].to_numpy(),
+            dataframe.iloc[:, 3].to_numpy(),
+        )
+        for dataframe in dataframes
+    ]
+
+    for data, plt_idx in zip(data_amag_numpy, range(1, 100)):
+        print("calculating autocorrelation...")
+        autocorrelation = GetAutocorrelationNumPy(data)
+        print("calculating autocorrelation done")
+
+        plt.subplot(3, 1, plt_idx)
+        plt.plot(autocorrelation)
+
+    plt.show()
+
+
+def plot_csv_detrended_position():
+    plt.close("all")
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv/*.csv"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    data_amag_numpy = [
+        dist(
+            dataframe.iloc[:, 1].to_numpy(),
+            dataframe.iloc[:, 2].to_numpy(),
+            dataframe.iloc[:, 3].to_numpy(),
+        )
+        for dataframe in dataframes
+    ]
+
+    for data, plt_idx in zip(data_amag_numpy, range(1, 100)):
+        detrended_velocity = np.cumsum(data - np.mean(data))
+        detrended_position = np.cumsum(detrended_velocity - np.mean(detrended_velocity))
+
+        plt.subplot(3, 1, plt_idx)
+        plt.plot(detrended_position)
+
+    plt.show()
+
+
+def play_csv():
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv\*.csv"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    for idx, df in enumerate(dataframes):
+        sample_rate = int(1 / df.iloc[:, 0].diff().median())
+        print(sample_rate)
+
+        data_float32 = df.iloc[:, 1].to_numpy().astype(np.float32)
+
+        # Cut off first and last n seconds
+        n = 5
+        data_trucated = data_float32[int(sample_rate * n) : -int(sample_rate * n)]
+
+        # Play a random 1 second segment
+        duration = 1
+        duration_in_samples = int(sample_rate * duration)
+        start_pos_in_samples = np.random.randint(
+            0, len(data_trucated) - duration_in_samples
+        )
+        data_to_play = data_trucated[start_pos_in_samples:]
+        sd.play(data_to_play, 1000)
+        print(f"Playing... {glob_foo[idx]}")
+        time.sleep(duration)
+        sd.stop()
+
+
 def GetAutocorrelation(series: pd.Series):
     n = len(series)
     series = series - series.mean()
     autocorr = [series.autocorr(lag=tau) for tau in range(n)]
     return np.array(autocorr)
+
+
+def GetAutocorrelationNumPy(np_array: np.ndarray):
+    n = len(np_array)
+    np_array = np_array - np.mean(np_array)
+    autocorr = np.correlate(np_array, np_array, mode="full")[n - 1 :]
+    autocorr /= autocorr[0]  # Normalize
+    return autocorr
 
 
 def PlotSpectrogram(
