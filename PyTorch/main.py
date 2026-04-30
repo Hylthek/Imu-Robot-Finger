@@ -12,6 +12,86 @@ def dist(x, y, z):
     return np.sqrt(x**2 + y**2 + z**2)
 
 
+def plot_csv_raw():
+    plt.close("all")
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv/*.csv"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    data_amag_numpy = [
+        dist(
+            dataframe.iloc[5000:6000, 1].to_numpy(),
+            dataframe.iloc[5000:6000, 2].to_numpy(),
+            dataframe.iloc[5000:6000, 3].to_numpy(),
+        )
+        for dataframe in dataframes
+    ]
+
+    for data, plt_idx in zip(data_amag_numpy, range(1, 100)):
+        plt.subplot(3, 1, plt_idx)
+        plt.plot(data)
+
+    plt.show()
+
+
+def plot_csv_feature_extraction():
+    plt.close("all")
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv/*.csv"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    data_amag_numpy = [
+        dist(
+            dataframe.iloc[5000:6000, 1].to_numpy(),
+            dataframe.iloc[5000:6000, 2].to_numpy(),
+            dataframe.iloc[5000:6000, 3].to_numpy(),
+        )
+        for dataframe in dataframes
+    ]
+
+    # Calculate statistical features
+    left = 350
+    right = 650
+    interval_mean = np.mean(data_amag_numpy[0][left:right])
+    interval_stddev = np.sqrt(np.var(data_amag_numpy[0][left:right]))
+    fft_values = np.fft.fft(data_amag_numpy[0][left:right])
+    fft_magnitude = np.abs(fft_values)
+    fft_magnitude[0] = 0  # Delete DC.
+    sampling_rate = 1000
+    # Remove frequencies higher than sampling_rate/2 (Nyquist frequency)
+    nyquist_idx = len(fft_magnitude) // 2
+    fft_magnitude[nyquist_idx:] = 0
+
+    inteval_freq = (
+        np.argmax(fft_magnitude) / len(data_amag_numpy[0][left:right]) * sampling_rate
+    )
+
+    print(f"Interval Mean: {interval_mean}")
+    print(f"Interval StdDev: {interval_stddev}")
+    print(f"Interval Frequency: {inteval_freq} peaks per sample")
+
+    plt.axvline(x=left, color="r", linestyle="--")
+    plt.axvline(x=right, color="r", linestyle="--")
+    plt.axvspan(left, right, alpha=0.3, color="yellow")
+    plt.plot(data_amag_numpy[0])
+
+    plt.text(
+        500,
+        9000,
+        f"Mean: {interval_mean:.1f}\nStdDev: {interval_stddev:.1f}\nFreq: {inteval_freq:.1f}Hz",
+        ha="center",
+        fontsize=30
+    )
+
+    plt.ylim(0, 15000)
+
+    plt.show()
+
+
 def plot_csv_autocorrelation():
     plt.close("all")
     glob_foo = glob.glob(
