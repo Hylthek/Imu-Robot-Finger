@@ -12,6 +12,53 @@ def dist(x, y, z):
     return np.sqrt(x**2 + y**2 + z**2)
 
 
+def sdp_demo():
+    # plot both waveforms on a single subplot and play 10 seconds from each
+    plt.close("all")
+    glob_foo = glob.glob(
+        r"C:\Users\hylth\Documents\Pico\ImuRobotFinger\PyTorch\csv/*.csv"
+    )
+
+    dataframes = [pd.read_csv(file) for file in glob_foo]
+
+    data_amag_numpy = [
+        dist(
+            dataframe.iloc[:, 1].to_numpy(),
+            dataframe.iloc[:, 2].to_numpy(),
+            dataframe.iloc[:, 3].to_numpy(),
+        )
+        for dataframe in dataframes
+    ]
+
+    for data, plt_idx in zip(data_amag_numpy, range(1, 3)):
+        plt.subplot(2, 1, plt_idx)
+        plt.plot(data)
+        plt.title(f"Surface #{plt_idx}")
+    plt.subplots_adjust(hspace=0.5)
+
+    if not Path(f"surface.png").exists():
+        plt.savefig(f"surface.png")
+
+    while True:
+        for data, plt_idx in zip(data_amag_numpy, range(1, 3)):
+            # Play a random 10 second segment
+            sample_rate = int(1 / (dataframes[0].iloc[:, 0].diff().median()))
+            duration = 5
+            duration_in_samples = int(sample_rate * duration)
+            start_pos_in_samples = np.random.randint(3000, len(data) - duration_in_samples)
+            data_to_play = data[
+                start_pos_in_samples : start_pos_in_samples + duration_in_samples
+            ]
+            data_to_play = data_to_play - np.mean(data_to_play)
+            data_to_play = data_to_play / max(data_to_play)
+            sd.play(data_to_play, 1000)
+            print(f"Playing surface #{plt_idx}...", end="", flush=True)
+            
+            time.sleep(duration)
+            sd.stop()
+            print("Done\n")
+
+
 def plot_csv_raw():
     plt.close("all")
     glob_foo = glob.glob(
@@ -84,7 +131,7 @@ def plot_csv_feature_extraction():
         9000,
         f"Mean: {interval_mean:.1f}\nStdDev: {interval_stddev:.1f}\nFreq: {inteval_freq:.1f}Hz",
         ha="center",
-        fontsize=30
+        fontsize=30,
     )
 
     plt.ylim(0, 15000)
